@@ -1,0 +1,249 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="poclegs">
+  <link name="base">
+    <inertial>
+      <origin xyz="0 0.000786784 0.127376" rpy="0 0 0" />
+      <mass value="4.5" />
+      <inertia ixx="0.0283083" ixy="1.60924e-19" ixz="-3.39873e-18" iyy="0.0403772" iyz="-1.87051e-05" izz="0.0225174" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="1.57079 0 0" />
+      <geometry><mesh filename="meshes/base_visual.obj" scale="1 1 1" /></geometry>
+      <material name="base_color"><color rgba="0.909804 0.678431 0.137255 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="1.57079 0 0" />
+      <geometry><mesh filename="meshes/base_collision.obj" scale="1 1 1" /></geometry>
+    </collision>
+  </link>
+  <link name="ll_hr">
+    <inertial>
+      <origin xyz="0.0196602 -0.0640727 -0.00326252" rpy="0 0 0" />
+      <mass value="1.7" />
+      <inertia ixx="0.00230537" ixy="0.000256071" ixz="5.05933e-05" iyy="0.00231768" iyz="-2.48e-05" izz="0.00369832" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.05 0.0025 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_hr_visual.obj" scale="1 1 1" /></geometry>
+      <material name="ll_hr_color"><color rgba="0.266667 0.588235 0.282353 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.05 0.0025 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_hr_collision.obj" scale="1 1 1" /></geometry>
+    </collision>
+  </link>
+  <link name="ll_haa">
+    <inertial>
+      <origin xyz="0.0348491 1.8066e-07 -0.0104894" rpy="0 0 0" />
+      <mass value="0.4" />
+      <inertia ixx="0.000278405" ixy="-2.90531e-09" ixz="8.57379e-05" iyy="0.000454489" iyz="7.92739e-10" izz="0.000482298" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.08 0.0725 -0.0215" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_haa_visual.obj" scale="1 1 1" /></geometry>
+      <material name="ll_haa_color"><color rgba="0.909804 0.678431 0.137255 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.08 0.0725 -0.0215" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_haa_collision.obj" scale="1 1 1" /></geometry>
+    </collision>
+  </link>
+  <link name="ll_hfe">
+    <inertial>
+      <origin xyz="0.0251627 -0.091 1.44498e-06" rpy="0 0 0" />
+      <mass value="3" />
+      <inertia ixx="0.017694" ixy="-2.27364e-09" ixz="-1.18229e-07" iyy="0.00467793" iyz="-1.55216e-12" izz="0.0146398" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.1605 0.09425 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_hfe_visual.obj" scale="1 1.3 1" /></geometry>
+      <material name="ll_hfe_color"><color rgba="0.266667 0.588235 0.282353 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.1605 0.09425 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_hfe_collision.obj" scale="1 1.3 1" /></geometry>
+    </collision>
+  </link>
+  <link name="ll_kfe">
+    <inertial>
+      <origin xyz="-0.0166914 -0.141844 -7.62807e-07" rpy="0 0 0" />
+      <mass value="1" />
+      <inertia ixx="0.00387012" ixy="-0.000105091" ixz="1.44496e-08" iyy="0.000764886" iyz="3.70525e-09" izz="0.00351309" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.158 0.27625 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_kfe_visual.obj" scale="1 1.3 1" /></geometry>
+      <material name="ll_kfe_color"><color rgba="0.909804 0.678431 0.137255 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.158 0.27625 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_kfe_collision.obj" scale="1 1.3 1" /></geometry>
+    </collision>
+  </link>
+  <link name="ll_ffe">
+    <inertial>
+      <origin xyz="0.00650784 -0.0442367 0.0160703" rpy="0 0 0" />
+      <mass value="0.4" />
+      <inertia ixx="0.000877241" ixy="3.60656e-05" ixz="-8.5775e-06" iyy="0.000727079" iyz="4.71677e-05" izz="0.000290082" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.115 0.3725 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_ffe_visual.obj" scale="1 1 1" /></geometry>
+      <material name="ll_ffe_color"><color rgba="0.266667 0.588235 0.282353 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.115 0.3725 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/ll_ffe_collision.obj" scale="1 1 1" /></geometry>
+    </collision>
+  </link>
+  <link name="lr_hr">
+    <inertial>
+      <origin xyz="0.0196602 -0.0640727 0.00326252" rpy="0 0 0" />
+      <mass value="1.7" />
+      <inertia ixx="0.00230537" ixy="0.000256071" ixz="-5.05933e-05" iyy="0.00231768" iyz="2.48e-05" izz="0.00369832" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.05 0.0025 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_hr_visual.obj" scale="1 1 1" /></geometry>
+      <material name="lr_hr_color"><color rgba="0.266667 0.588235 0.282353 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.05 0.0025 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_hr_collision.obj" scale="1 1 1" /></geometry>
+    </collision>
+  </link>
+  <link name="lr_haa">
+    <inertial>
+      <origin xyz="0.0348491 1.8066e-07 -0.0325106" rpy="0 0 0" />
+      <mass value="0.4" />
+      <inertia ixx="0.000278405" ixy="-2.90531e-09" ixz="-8.57379e-05" iyy="0.000454489" iyz="-7.92739e-10" izz="0.000482298" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.08 0.0725 -0.0215" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_haa_visual.obj" scale="1 1 1" /></geometry>
+      <material name="lr_haa_color"><color rgba="0.909804 0.678431 0.137255 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.08 0.0725 -0.0215" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_haa_collision.obj" scale="1 1 1" /></geometry>
+    </collision>
+  </link>
+  <link name="lr_hfe">
+    <inertial>
+      <origin xyz="0.0251627 -0.091 -1.44498e-06" rpy="0 0 0" />
+      <mass value="3" />
+      <inertia ixx="0.017694" ixy="-2.27364e-09" ixz="1.18229e-07" iyy="0.00467793" iyz="1.55216e-12" izz="0.0146398" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.1605 0.09425 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_hfe_visual.obj" scale="1 1.3 1" /></geometry>
+      <material name="lr_hfe_color"><color rgba="0.266667 0.588235 0.282353 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.1605 0.09425 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_hfe_collision.obj" scale="1 1.3 1" /></geometry>
+    </collision>
+  </link>
+  <link name="lr_kfe">
+    <inertial>
+      <origin xyz="-0.0166914 -0.141844 7.62807e-07" rpy="0 0 0" />
+      <mass value="1" />
+      <inertia ixx="0.00387012" ixy="-0.000105091" ixz="-1.44496e-08" iyy="0.000764886" iyz="-3.70525e-09" izz="0.00351309" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.158 0.27625 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_kfe_visual.obj" scale="1 1.3 1" /></geometry>
+      <material name="lr_kfe_color"><color rgba="0.909804 0.678431 0.137255 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.158 0.27625 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_kfe_collision.obj" scale="1 1.3 1" /></geometry>
+    </collision>
+  </link>
+  <link name="lr_ffe">
+    <inertial>
+      <origin xyz="0.00650784 -0.0442367 -0.0160703" rpy="0 0 0" />
+      <mass value="0.4" />
+      <inertia ixx="0.000877241" ixy="3.60656e-05" ixz="8.5775e-06" iyy="0.000727079" iyz="-4.71677e-05" izz="0.000290082" />
+    </inertial>
+    <visual>
+      <origin xyz="-0.115 0.3725 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_ffe_visual.obj" scale="1 1 1" /></geometry>
+      <material name="lr_ffe_color"><color rgba="0.266667 0.588235 0.282353 1" /></material>
+    </visual>
+    <collision>
+      <origin xyz="-0.115 0.3725 0" rpy="0 0 0" />
+      <geometry><mesh filename="meshes/lr_ffe_collision.obj" scale="1 1 1" /></geometry>
+    </collision>
+  </link>
+  <joint name="LL_HR" type="revolute">
+    <origin xyz="0.05 0 -0.0025" rpy="1.57079 0 0" />
+    <parent link="base" />
+    <child link="ll_hr" />
+    <axis xyz="0 1 0" />
+    <limit lower="-0.7854" upper="0.7854" effort="24" velocity="3.14159" />
+  </joint>
+  <joint name="LL_HAA" type="revolute">
+    <origin xyz="0.03 -0.07 0.0215" rpy="0 0 0" />
+    <parent link="ll_hr" />
+    <child link="ll_haa" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.69813" upper="0.69813" effort="30" velocity="1.57079" />
+  </joint>
+  <joint name="LL_HFE" type="revolute">
+    <origin xyz="0.0805 0 -0.0215" rpy="0 0 0" />
+    <parent link="ll_haa" />
+    <child link="ll_hfe" />
+    <axis xyz="1 0 0" />
+    <limit lower="-1.57079" upper="1.57079" effort="30" velocity="3.14159" />
+  </joint>
+  <joint name="LL_KFE" type="revolute">
+    <origin xyz="-0.0025 -0.182 0" rpy="0 0 0" />
+    <parent link="ll_hfe" />
+    <child link="ll_kfe" />
+    <axis xyz="1 0 0" />
+    <limit lower="-2.35619" upper="2.35619" effort="30" velocity="1.57079" />
+  </joint>
+  <joint name="LL_FFE" type="revolute">
+    <origin xyz="-0.042 -0.208 0" rpy="0 0 0" />
+    <parent link="ll_kfe" />
+    <child link="ll_ffe" />
+    <axis xyz="1 0 0" />
+    <limit lower="-1.57079" upper="1.57079" effort="24" velocity="3.14159" />
+  </joint>
+  <joint name="LR_HR" type="revolute">
+    <origin xyz="-0.05 0 -0.0025" rpy="1.5708 2.53518e-06 3.14159" />
+    <parent link="base" />
+    <child link="lr_hr" />
+    <axis xyz="0 -1 0" />
+    <limit lower="-0.7854" upper="0.7854" effort="24" velocity="3.14159" />
+  </joint>
+  <joint name="LR_HAA" type="revolute">
+    <origin xyz="0.03 -0.07 0.0215" rpy="0 0 0" />
+    <parent link="lr_hr" />
+    <child link="lr_haa" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.69813" upper="0.69813" effort="30" velocity="1.57079" />
+  </joint>
+  <joint name="LR_HFE" type="revolute">
+    <origin xyz="0.0805 0 -0.0215" rpy="0 0 0" />
+    <parent link="lr_haa" />
+    <child link="lr_hfe" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-1.57079" upper="1.57079" effort="30" velocity="3.14159" />
+  </joint>
+  <joint name="LR_KFE" type="revolute">
+    <origin xyz="-0.0025 -0.182 0" rpy="0 0 0" />
+    <parent link="lr_hfe" />
+    <child link="lr_kfe" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-2.35619" upper="2.35619" effort="30" velocity="1.57079" />
+  </joint>
+  <joint name="LR_FFE" type="revolute">
+    <origin xyz="-0.042 -0.208 0" rpy="0 0 0" />
+    <parent link="lr_kfe" />
+    <child link="lr_ffe" />
+    <axis xyz="-1 0 0" />
+    <limit lower="-1.57079" upper="1.57079" effort="24" velocity="3.14159" />
+  </joint>
+</robot>

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+logs/
+outputs/
+# setup.sh clones this
+Extra_RPO_Walk/roboto_origin/
+# full videos go to GitHub Releases; README shows GIFs from media/gif
+*.mp4
+Instructor/

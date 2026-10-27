@@ -1,0 +1,172 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.3.2"
+    }
+    defaultPrim = "poclegs"
+    endTimeCode = 1000000
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    startTimeCode = 0
+    subLayers = [
+        @./physics.usda@
+    ]
+    upAxis = "Z"
+)
+
+over "poclegs"
+{
+    over "Physics"
+    {
+        over "LL_HR" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LL_HAA" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LL_HFE" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LL_KFE" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LL_FFE" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LR_HR" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LR_HAA" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LR_HFE" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LR_KFE" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        over "LR_FFE" (
+            delete apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsJointStateAPI:angular"]
+            prepend apiSchemas = ["MjcJointAPI"]
+        )
+        {
+        }
+
+        def MjcActuator "LL_HR_actuator"
+        {
+            uniform double mjc:forceRange:max = 24
+            uniform double mjc:forceRange:min = -24
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LL_HR>
+        }
+
+        def MjcActuator "LL_HAA_actuator"
+        {
+            uniform double mjc:forceRange:max = 30
+            uniform double mjc:forceRange:min = -30
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LL_HAA>
+        }
+
+        def MjcActuator "LL_HFE_actuator"
+        {
+            uniform double mjc:forceRange:max = 30
+            uniform double mjc:forceRange:min = -30
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LL_HFE>
+        }
+
+        def MjcActuator "LL_KFE_actuator"
+        {
+            uniform double mjc:forceRange:max = 30
+            uniform double mjc:forceRange:min = -30
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LL_KFE>
+        }
+
+        def MjcActuator "LL_FFE_actuator"
+        {
+            uniform double mjc:forceRange:max = 24
+            uniform double mjc:forceRange:min = -24
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LL_FFE>
+        }
+
+        def MjcActuator "LR_HR_actuator"
+        {
+            uniform double mjc:forceRange:max = 24
+            uniform double mjc:forceRange:min = -24
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LR_HR>
+        }
+
+        def MjcActuator "LR_HAA_actuator"
+        {
+            uniform double mjc:forceRange:max = 30
+            uniform double mjc:forceRange:min = -30
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LR_HAA>
+        }
+
+        def MjcActuator "LR_HFE_actuator"
+        {
+            uniform double mjc:forceRange:max = 30
+            uniform double mjc:forceRange:min = -30
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LR_HFE>
+        }
+
+        def MjcActuator "LR_KFE_actuator"
+        {
+            uniform double mjc:forceRange:max = 30
+            uniform double mjc:forceRange:min = -30
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LR_KFE>
+        }
+
+        def MjcActuator "LR_FFE_actuator"
+        {
+            uniform double mjc:forceRange:max = 24
+            uniform double mjc:forceRange:min = -24
+            custom rel mjc:target
+            append rel mjc:target = </poclegs/Physics/LR_FFE>
+        }
+    }
+}
+

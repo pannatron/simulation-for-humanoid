@@ -1,0 +1,411 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.3.2"
+    }
+    endTimeCode = 1000000
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    startTimeCode = 0
+    upAxis = "Z"
+)
+
+def Scope "Instances"
+{
+    def Xform "base_visual" (
+        prepend references = @./geometries.usd@</Geometries/base_visual>
+    )
+    {
+        over "base_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/base_visual/VisualMaterials/base_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "base_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/base_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "base_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/base_visual>
+    )
+    {
+        over "base_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "ll_hr_visual" (
+        prepend references = @./geometries.usd@</Geometries/ll_hr_visual>
+    )
+    {
+        over "ll_hr_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/ll_hr_visual/VisualMaterials/ll_hr_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "ll_hr_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/ll_hr_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "ll_hr_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/ll_hr_visual>
+    )
+    {
+        over "ll_hr_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "ll_haa_visual" (
+        prepend references = @./geometries.usd@</Geometries/ll_haa_visual>
+    )
+    {
+        over "ll_haa_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/ll_haa_visual/VisualMaterials/ll_haa_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "ll_haa_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/base_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "ll_haa_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/ll_haa_visual>
+    )
+    {
+        over "ll_haa_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "ll_hfe_visual" (
+        prepend references = @./geometries.usd@</Geometries/ll_hfe_visual>
+    )
+    {
+        over "ll_hfe_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/ll_hfe_visual/VisualMaterials/ll_hfe_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "ll_hfe_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/ll_hr_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "ll_hfe_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/ll_hfe_visual>
+    )
+    {
+        over "ll_hfe_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "ll_kfe_visual" (
+        prepend references = @./geometries.usd@</Geometries/ll_kfe_visual>
+    )
+    {
+        over "ll_kfe_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/ll_kfe_visual/VisualMaterials/ll_kfe_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "ll_kfe_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/base_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "ll_kfe_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/ll_kfe_visual>
+    )
+    {
+        over "ll_kfe_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "ll_ffe_visual" (
+        prepend references = @./geometries.usd@</Geometries/ll_ffe_visual>
+    )
+    {
+        over "ll_ffe_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/ll_ffe_visual/VisualMaterials/ll_ffe_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "ll_ffe_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/ll_hr_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "ll_ffe_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/ll_ffe_visual>
+    )
+    {
+        over "ll_ffe_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "lr_hr_visual" (
+        prepend references = @./geometries.usd@</Geometries/lr_hr_visual>
+    )
+    {
+        over "lr_hr_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/lr_hr_visual/VisualMaterials/lr_hr_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "lr_hr_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/ll_hr_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "lr_hr_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/lr_hr_visual>
+    )
+    {
+        over "lr_hr_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "lr_haa_visual" (
+        prepend references = @./geometries.usd@</Geometries/lr_haa_visual>
+    )
+    {
+        over "lr_haa_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/lr_haa_visual/VisualMaterials/lr_haa_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "lr_haa_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/base_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "lr_haa_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/lr_haa_visual>
+    )
+    {
+        over "lr_haa_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "lr_hfe_visual" (
+        prepend references = @./geometries.usd@</Geometries/lr_hfe_visual>
+    )
+    {
+        over "lr_hfe_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/lr_hfe_visual/VisualMaterials/lr_hfe_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "lr_hfe_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/ll_hr_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "lr_hfe_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/lr_hfe_visual>
+    )
+    {
+        over "lr_hfe_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "lr_kfe_visual" (
+        prepend references = @./geometries.usd@</Geometries/lr_kfe_visual>
+    )
+    {
+        over "lr_kfe_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/lr_kfe_visual/VisualMaterials/lr_kfe_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "lr_kfe_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/base_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "lr_kfe_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/lr_kfe_visual>
+    )
+    {
+        over "lr_kfe_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+
+    def Xform "lr_ffe_visual" (
+        prepend references = @./geometries.usd@</Geometries/lr_ffe_visual>
+    )
+    {
+        over "lr_ffe_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            custom rel material:binding
+            prepend rel material:binding = </Instances/lr_ffe_visual/VisualMaterials/lr_ffe_color>
+        }
+
+        def Scope "VisualMaterials"
+        {
+            def Material "lr_ffe_color" (
+                instanceable = true
+                prepend references = @./materials.usda@</Materials/ll_hr_color>
+            )
+            {
+            }
+        }
+    }
+
+    def Xform "lr_ffe_visual_1" (
+        prepend references = @./geometries.usd@</Geometries/lr_ffe_visual>
+    )
+    {
+        over "lr_ffe_visual" (
+            apiSchemas = ["PhysicsCollisionAPI", "NewtonCollisionAPI", "PhysicsMeshCollisionAPI", "NewtonMeshCollisionAPI"]
+        )
+        {
+            token physics:approximation = "convexHull"
+            token purpose = "guide"
+        }
+    }
+}
+

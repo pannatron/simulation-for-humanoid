@@ -1,0 +1,144 @@
+#usda 1.0
+(
+    customLayerData = {
+        string creator = "URDF USD Converter v0.3.2"
+    }
+    defaultPrim = "poclegs"
+    endTimeCode = 1000000
+    kilogramsPerUnit = 1
+    metersPerUnit = 1
+    startTimeCode = 0
+    upAxis = "Z"
+)
+
+over "poclegs" (
+    prepend apiSchemas = ["IsaacRobotAPI"]
+)
+{
+    custom rel isaac:physics:robotJoints
+    custom rel isaac:physics:robotLinks
+
+    over "Physics"
+    {
+        over "LL_HR" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LR_HR" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LL_HAA" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LL_HFE" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LL_KFE" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LL_FFE" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LR_HAA" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LR_HFE" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LR_KFE" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+
+        over "LR_FFE" (
+            prepend apiSchemas = ["IsaacJointAPI"]
+        )
+        {
+        }
+    }
+
+    over "Geometry"
+    {
+        over "base" (
+            prepend apiSchemas = ["IsaacLinkAPI"]
+        )
+        {
+            over "ll_hr" (
+                prepend apiSchemas = ["IsaacLinkAPI"]
+            )
+            {
+                over "ll_haa" (
+                    prepend apiSchemas = ["IsaacLinkAPI"]
+                )
+                {
+                    over "ll_hfe" (
+                        prepend apiSchemas = ["IsaacLinkAPI"]
+                    )
+                    {
+                        over "ll_kfe" (
+                            prepend apiSchemas = ["IsaacLinkAPI"]
+                        )
+                        {
+                            over "ll_ffe" (
+                                prepend apiSchemas = ["IsaacLinkAPI"]
+                            )
+                            {
+                            }
+                        }
+                    }
+                }
+            }
+
+            over "lr_hr" (
+                prepend apiSchemas = ["IsaacLinkAPI"]
+            )
+            {
+                over "lr_haa" (
+                    prepend apiSchemas = ["IsaacLinkAPI"]
+                )
+                {
+                    over "lr_hfe" (
+                        prepend apiSchemas = ["IsaacLinkAPI"]
+                    )
+                    {
+                        over "lr_kfe" (
+                            prepend apiSchemas = ["IsaacLinkAPI"]
+                        )
+                        {
+                            over "lr_ffe" (
+                                prepend apiSchemas = ["IsaacLinkAPI"]
+                            )
+                            {
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
