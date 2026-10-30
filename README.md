@@ -21,13 +21,22 @@
 
 เฉลยและไฟล์ของผู้สอน (`Instructor/`) ไม่ได้อยู่ใน repo นี้
 
+## Get the course files
+```bash
+git clone https://github.com/pannatron/simulation-for-humanoid.git ~/Downloads/Simulation_for_Humanoid
+# already cloned: update to the latest week
+cd ~/Downloads/Simulation_for_Humanoid && git pull
+```
+Cloned before 30 Oct 2026? The history was rewritten that day, so `git pull` fails: move the old folder away and clone again.
+
 ## First-time setup
 - You need Isaac Lab 3 and `uv`. Put this course folder anywhere you like.
 - Tell the commands where Isaac Lab is installed (change the path to yours):
   ```bash
   export ISAACLAB_PATH=~/IsaacLab
   ```
-- The ready-made projects (`Week04_RL_poclegs/poclegs_lab`, `Week05_Reward_Function/spot_reward_lab`) find Isaac Lab
+- The ready-made projects (`Week04_RL_poclegs/poclegs_lab`, `Week05_Reward_Function/spot_reward_lab`,
+  `Week07_Curriculum_Maze/g1_maze_lab`) find Isaac Lab
   through a relative path in `pyproject.toml` that only works if Isaac Lab is at `~/IsaacLab` and this folder is at
   `~/Downloads/Simulation_for_Humanoid`. Otherwise run this once in the project folder, before `uv sync`:
   ```bash
