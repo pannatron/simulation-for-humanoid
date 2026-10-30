@@ -59,18 +59,33 @@ hazards (a trench 0.15-0.22 m, 2 steep ramps 0.24-0.30 m, 2 spike beds, ice) and
 (2 low ramps 0.10-0.18 m, loose boxes, ice). The first hard hazard of the short route is 1-2 cells after the fork,
 so walking in a little shows it. Spike beds: red cones 25-35 cm, slippery, on one side of a corridor (no extra rule,
 just hard to walk on). A DNF is ranked by how close the robot got to the goal along the route it was on.
+Starter for training (`G1-Hazard-Starter`, `src/g1_maze_lab/tasks/hazard_starter/`): G1 Rough on Isaac Lab's
+built-in gaps / slopes / boxes / bumps + random foot friction 0.2-1.0 (ice). It trains as it is; copy the folder,
+rename the task and make the ground more like the maze (see the TODO in `env_cfg.py`).
+If a run still stops with "observation group 'policy' ... contains NaN values" (the physics blew up), resume it:
+`--checkpoint logs/rsl_rl/<exp>/<run>/model_<last>.pt` (a checkpoint is saved every 50 iterations). The starter task
+resets a robot whose state turns NaN (`physics_blowup` termination); copy that term into your own task.
 ```bash
+# fine-tune the walking policy on the starter ground (~25 min for 1500 it on an RTX 3060 Laptop)
+uv run isaaclab train --rl_library rsl_rl --task G1-Hazard-Starter --num_envs 1024 \
+    --checkpoint pretrained/g1_rough/model_pretrained.pt agent.max_iterations=1500
 # try your policy / pilot (nothing goes to the leaderboard)
 uv run python scripts/challenge.py --policy logs/rsl_rl/<exp>/<run>/model_XXXX.pt --pilot pilot.py --seed 1 --viz newton
 # instructor: upload page + leaderboard (students http://<ip>:8000, projector http://<ip>:8000/board)
 CHALLENGE_SEED=<seed> uv run python scripts/challenge_server.py
 # instructor: when everyone has uploaded, run the queue on the round's seed (upload order; the pages show the queue)
 uv run python scripts/challenge_runner.py --seed <seed>            # --all = everyone again, --no-replay = faster
+# practice round (before the real one): run every upload as it comes in, results on the pages within ~2 min
+CHALLENGE_SEED=1 uv run python scripts/challenge_server.py   # and in a 2nd terminal:
+uv run python scripts/challenge_runner.py --seed 1 --watch --no-replay
 # then play every run on the projector, last place first, the winner at the end: http://<ip>:8000/replay
 uv run python scripts/challenge.py --team team_a --seed <seed> --viz newton   # or one team by hand
 ```
 Submit `policy.pt` (required, same network as G1 Rough: checked on upload), `pilot.py` (optional, `class Pilot`, see
-`DefaultPilot` in `scripts/challenge.py`) and up to 5 helper `.py` files the pilot imports (every `.py` must compile).
+`DefaultPilot` in `scripts/challenge.py`) and up to 5 helper `.py` files the pilot imports (every `.py` must compile, and may not use the real map:
+`GENERATED`, `HAZARDS`, `HARD_CELLS` or `g1_maze_lab.terrains` are refused on upload). A run longer than
+`--timeout` seconds of wall clock (default 3 x 300 + 180) is stopped and shown as an error (a pilot that hangs).
+A team that is running cannot upload until its run ends.
 The leaderboard shows the round's seed only (`CHALLENGE_SEED`), best run per team; run logs: `submissions/_logs/`, replay videos (the latest run of each team, recorded from the Newton viewer: a run takes about 1.2x its maze time, `--no-replay` runs without a window, about 2x faster): `submissions/_replays/`. A fall, a crash or being stuck 10 s sends the robot back to the start; the clock keeps running.
 
 ## Tests

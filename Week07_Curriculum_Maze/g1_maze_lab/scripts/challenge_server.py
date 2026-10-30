@@ -14,7 +14,9 @@ team's run on the projector, from the last place up to the winner.
 Note: pilot.py runs on this machine. Use it on a classroom network only, and read a pilot before running it.
 """
 
+import contextlib
 import csv
+import fcntl
 import glob
 import html
 import json
@@ -35,6 +37,8 @@ MAX_BYTES = 60 * 1024 * 1024
 REF_POLICY = os.path.join(HERE, "..", "pretrained", "g1_rough", "model_pretrained.pt")
 TEAM_RE = r"[A-Za-z0-9][A-Za-z0-9_\-]{1,31}"
 HELPER_RE = r"[A-Za-z][A-Za-z0-9_]{0,40}\.py"
+# the real map of the maze: a pilot may only use what the robot senses (obs)
+MAP_RE = rb"\b(GENERATED|HAZARDS|HARD_CELLS)\b|g1_maze_lab\.terrains|from\s+g1_maze_lab\s+import\s+[^\n]*\bterrains\b"
 
 
 # ----------------------------------------------------------------------------- checks
@@ -85,10 +89,27 @@ def check_python(name, data: bytes):
         return f"{name} ต้องเป็นไฟล์ข้อความ UTF-8"
     if name == "pilot.py" and not re.search(rb"^class\s+Pilot\b", data, re.M):
         return "pilot.py ต้องมี class Pilot"
+    m = re.search(MAP_RE, data)
+    if m:
+        line = data[: m.start()].count(b"\n") + 1
+        return (f"{name} บรรทัด {line}: ใช้ {m.group(0).decode(errors='ignore')} ไม่ได้ "
+                "(นี่คือแผนที่จริงของด่าน pilot ต้องรู้ทางจาก obs เท่านั้น)")
     return None
 
 
 # ----------------------------------------------------------------------------- data
+@contextlib.contextmanager
+def status_lock():
+    """status.json is written by this server (uploads) and by challenge_runner.py: one writer at a time."""
+    os.makedirs(SUBMISSIONS, exist_ok=True)
+    with open(os.path.join(SUBMISSIONS, ".status.lock"), "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 def load_status():
     try:
         with open(os.path.join(SUBMISSIONS, "status.json")) as f:
@@ -525,6 +546,8 @@ class Handler(BaseHTTPRequestHandler):
             err = check_python(fname, data)
             if err:
                 return self._error(err)
+        if load_status().get(team, {}).get("state") == "running":
+            return self._error(f"ทีม {team} กำลังวิ่งอยู่บนเครื่องครู รอให้รอบนี้จบก่อนแล้วค่อยส่งใหม่")
         folder = os.path.join(SUBMISSIONS, team)
         os.makedirs(folder, exist_ok=True)
         for old in os.listdir(folder):  # a new upload replaces everything (also exported/ and __pycache__/ of old runs)
@@ -537,9 +560,10 @@ class Handler(BaseHTTPRequestHandler):
                 f.write(data)
         for old in glob.glob(os.path.join(SUBMISSIONS, "_replays", f"{team}_seed*.*")):  # replays of the old upload
             os.remove(old)
-        st = load_status()
-        st[team] = {"state": "waiting", "msg": "", "uploaded": time.strftime("%H:%M:%S"), "uploaded_at": time.time()}
-        save_status(st)
+        with status_lock():
+            st = load_status()
+            st[team] = {"state": "waiting", "msg": "", "uploaded": time.strftime("%H:%M:%S"), "uploaded_at": time.time()}
+            save_status(st)
         names = ", ".join(n for n, _ in saved)
         print(f"[UPLOAD] {team}: {names} ({len(policy) / 1e6:.1f} MB)", flush=True)
         return self._send(student_page(f'<div class="msg">✓ ส่งงานทีม <b>{html.escape(team)}</b> แล้ว: {html.escape(names)} '
