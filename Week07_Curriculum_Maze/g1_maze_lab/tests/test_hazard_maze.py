@@ -101,10 +101,12 @@ def test_spike_bed_leaves_a_free_lane():
             lo, hi = (y0 - j * c, y1 - j * c) if axis == 0 else (x0 - i * c, x1 - i * c)
             along = (x1 - x0) if axis == 0 else (y1 - y0)
             assert abs(along - cfg.spike_length) < 1e-6
-            # one end at a wall, the other just past the middle: the free lane on the other side
-            assert abs(abs(lo if abs(lo) > abs(hi) else hi) - hw) < 1e-6
-            free = hw - min(abs(lo), abs(hi))
-            assert hw - cfg.spike_reach_range[1] - 1e-6 <= free <= hw - cfg.spike_reach_range[0] + 1e-6
+            # one end at a wall, the other near the middle: the free lane on the other side
+            wall, inner = (lo, hi) if abs(lo) > abs(hi) else (hi, lo)
+            assert abs(abs(wall) - hw) < 1e-6
+            reach = -inner * np.sign(wall)  # how far the bed reaches past the middle
+            assert cfg.spike_reach_range[0] - 1e-6 <= reach <= cfg.spike_reach_range[1] + 1e-6
+            assert hw - reach >= 0.92, "free lane too narrow for a walking G1"
         near = [g[:2] for g in hz["spike"] + hz["gap"] + hz["ramp"]]
         for i, j, *_ in hz["spike"] + hz["ramp"]:
             assert sum(abs(i - a) + abs(j - b) == 1 for a, b in near) == 0, "ramp / spike bed next to another hazard"
@@ -128,3 +130,72 @@ def test_first_hard_hazard_near_the_fork():
         hard = {(x[0], x[1]): k for k in ("gap", "ramp", "spike") for x in hz[k] if (x[0], x[1]) in short}
         first = min(short.index(c) for c in hard)
         assert first < cfg.peek_cells and hard[short[first]] in ("ramp", "spike")
+
+
+def _build_level(seed, **kw):
+    from g1_maze_lab.terrains import GENERATED
+
+    n = kw.get("num_cells", 7)
+    cfg = HazardMazeTerrainCfg(size=(n * 2.0 + 1.0,) * 2, **kw)
+    cfg.seed = seed
+    _, origin = hazard_maze_terrain(0.5, cfg)
+    return cfg, origin, HAZARDS[-1], GENERATED[-1]
+
+
+def test_level9_slalom_and_long_route_spikes():
+    kw = dict(num_cells=9, short_gaps=2, short_slaloms=1, long_ramps=3, long_spikes=2, long_rough=4, long_ice=3)
+    for seed in range(10):
+        cfg, _, hz, _ = _build_level(seed, **kw)
+        short_only = set(hz["routes"]["short"]) - set(hz["routes"]["long"])
+        long_only = set(hz["routes"]["long"]) - set(hz["routes"]["short"])
+        assert len(hz["slalom"]) == 1 and hz["slalom"][0] in short_only
+        cells = [tuple(b[:2]) for b in hz["spike"]]
+        assert cells.count(hz["slalom"][0]) == 2, "a slalom cell has two beds"
+        assert sum(c in long_only for c in cells) == cfg.long_spikes
+        assert len(hz["gap"]) == 2
+        # slalom: the beds are on opposite sides of the corridor, with a gap along it
+        i, j, a, *r1 = next(b for b in hz["spike"] if tuple(b[:2]) == hz["slalom"][0])
+        r2 = [b[3:] for b in hz["spike"] if tuple(b[:2]) == hz["slalom"][0]][1]
+        across = (1, 3) if a == 0 else (0, 2)
+        along = (0, 2) if a == 0 else (1, 3)
+        mid = (j if a == 0 else i) * cfg.cell_size
+        s1 = sum(r1[k] for k in across) / 2 - mid
+        s2 = sum(r2[k] for k in across) / 2 - mid
+        assert s1 * s2 < 0
+        assert abs(min(r1[along[1]], r2[along[1]]) - max(r1[along[0]], r2[along[0]])) >= cfg.slalom_gap - 1e-6
+
+
+def test_random_ends():
+    for seed in range(15):
+        cfg, origin, hz, gen = _build_level(seed, num_cells=10, random_ends=True, long_spikes=2)
+        s, g = hz["start"], hz["goal"]
+        assert abs(s[0] - g[0]) + abs(s[1] - g[1]) >= 10
+        assert gen["start"] == s and gen["goal"] == g
+        assert len(hz["routes"]["long"]) - len(hz["routes"]["short"]) >= cfg.min_route_gap
+        cells = [tuple(b[:2]) for b in hz["gap"] + hz["ramp"] + hz["spike"]] + hz["ice"] + hz["rough"]
+        assert s not in cells and g not in cells
+        # the robot spawns in the start cell
+        x0 = 0.5 * (cfg.size[0] - 10 * cfg.cell_size)
+        np.testing.assert_allclose(origin[:2], [x0 + (s[0] + 0.5) * cfg.cell_size, x0 + (s[1] + 0.5) * cfg.cell_size])
+        assert len({hz["start"] for _ in [0]}) == 1
+    starts = {_build_level(k, num_cells=10, random_ends=True)[2]["start"] for k in range(15)}
+    assert len(starts) > 3, "start cell does not change with the seed"
+
+
+def test_spike_hit_rule():
+    import importlib.util
+    import os
+    import sys
+    import types
+
+    import torch
+
+    # spike_hit only needs torch: load it from scripts/challenge.py without starting the simulator
+    src = open(os.path.join(os.path.dirname(__file__), "..", "scripts", "challenge.py")).read()
+    code = src[src.index("def spike_hit"): src.index("# ---", src.index("def spike_hit"))]
+    ns = {"torch": torch}
+    exec(code, ns)
+    beds = [(0.0, 0.0, 1.0, 0.5)]
+    assert ns["spike_hit"](torch.tensor([[0.5, 0.2, 0.1]]), beds, 0.37)
+    assert not ns["spike_hit"](torch.tensor([[0.5, 0.2, 0.6]]), beds, 0.37), "above the tips"
+    assert not ns["spike_hit"](torch.tensor([[0.5, 0.6, 0.1]]), beds, 0.37), "beside the bed"

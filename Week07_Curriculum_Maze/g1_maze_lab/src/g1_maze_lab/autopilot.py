@@ -29,7 +29,7 @@ class MazeAutopilot:
 
     Args:
         num_envs: number of robots.
-        num_cells: maze cells per side (the goal is cell ``(n-1, n-1)``).
+        num_cells: maze cells per side.
         cell_size: cell width [m].
         strategy: ``"left"`` / ``"right"`` (wall following) or ``"flood"`` (flood fill on the walls seen so far).
         speed: forward speed command [m/s].
@@ -37,6 +37,8 @@ class MazeAutopilot:
             0.35 = walk to the centre, then turn there. 0.5 = start the turn half a metre early and walk it as an arc.
         min_speed: forward speed during a sharp turn [m/s] (0.15 = nearly on the spot).
         max_turn: largest yaw rate command [rad/s].
+        start, goal: start / goal cell (default ``(0, 0)`` / ``(n-1, n-1)``). Positions are always relative to the
+            centre of cell ``(0, 0)``.
     """
 
     def __init__(
@@ -50,8 +52,12 @@ class MazeAutopilot:
         turn_early: float = 0.35,
         min_speed: float = 0.15,
         max_turn: float = 0.8,
+        start: tuple[int, int] = (0, 0),
+        goal: tuple[int, int] | None = None,
     ):
         self.n, self.c, self.device = num_cells, cell_size, device
+        self.start = tuple(int(v) for v in start)
+        self.goal = (num_cells - 1, num_cells - 1) if goal is None else tuple(int(v) for v in goal)
         self.strategy, self.speed = strategy, speed
         self.turn_early, self.min_speed = turn_early, min_speed
         self.num_envs = num_envs
@@ -62,8 +68,9 @@ class MazeAutopilot:
         self.walls[:, :, -1, 1] = 1
         self.walls[:, 0, :, 2] = 1
         self.walls[:, :, 0, 3] = 1
-        self.target = torch.zeros(num_envs, 2, dtype=torch.long, device=device)  # cell we are walking to
-        self.origin = torch.zeros(num_envs, 2, dtype=torch.long, device=device)  # cell the last decision was made in
+        start_t = torch.tensor(self.start, dtype=torch.long, device=device)
+        self.target = start_t.repeat(num_envs, 1)  # cell we are walking to
+        self.origin = start_t.repeat(num_envs, 1)  # cell the last decision was made in
         self.heading = torch.zeros(num_envs, dtype=torch.long, device=device)  # last direction travelled
         self.need_decision = torch.ones(num_envs, dtype=torch.bool, device=device)
         self.cells_walked = torch.zeros(num_envs, dtype=torch.long, device=device)
@@ -74,7 +81,7 @@ class MazeAutopilot:
 
     # ------------------------------------------------------------------ helpers
     def cell_of(self, pos_xy: torch.Tensor) -> torch.Tensor:
-        """Maze cell index of a position given relative to the start-cell centre."""
+        """Maze cell index of a position given relative to the centre of cell (0, 0)."""
         return torch.round(pos_xy / self.c).long().clamp(0, self.n - 1)
 
     def centre_of(self, cell: torch.Tensor) -> torch.Tensor:
@@ -86,7 +93,7 @@ class MazeAutopilot:
     ) -> torch.Tensor:
         """Return ``(num_envs, 4)`` bools: is there a wall on side d of ``cell``?
 
-        ``hits_xy`` are the ray hit points (relative to the start-cell centre) and ``hits_z`` their heights.
+        ``hits_xy`` are the ray hit points (relative to the centre of cell (0, 0)) and ``hits_z`` their heights.
         A side is blocked when at least ``min_hits`` tall points (> 0.5 m) fall inside a thin box
         that sits on that side of the cell (0.3 m deep, 1.2 m long).
         """
@@ -125,7 +132,7 @@ class MazeAutopilot:
         n = self.n
         big = n * n + 1
         dist = torch.full(walls.shape[:3], big, dtype=torch.long, device=self.device)
-        dist[:, n - 1, n - 1] = 0
+        dist[:, self.goal[0], self.goal[1]] = 0
         blocked = walls == 1
         for _ in range(n * n):
             new = dist.clone()
@@ -238,8 +245,9 @@ class MazeAutopilot:
         self.walls[env_ids, :, -1, 1] = 1
         self.walls[env_ids, 0, :, 2] = 1
         self.walls[env_ids, :, 0, 3] = 1
-        self.target[env_ids] = 0
-        self.origin[env_ids] = 0
+        start = torch.tensor(self.start, dtype=torch.long, device=self.device)
+        self.target[env_ids] = start
+        self.origin[env_ids] = start
         self.heading[env_ids] = 0
         self.need_decision[env_ids] = True
         self.cells_walked[env_ids] = 0
@@ -258,7 +266,7 @@ class MazeAutopilot:
             rows.append("+" + "".join(ch(w[i, j, 1], "-") + "+" for i in range(n)))
             line = ch(w[0, j, 2], "|")
             for i in range(n):
-                label = "S" if (i, j) == (0, 0) else "G" if (i, j) == (n - 1, n - 1) else " "
+                label = "S" if (i, j) == self.start else "G" if (i, j) == self.goal else " "
                 line += label + ch(w[i, j, 0], "|")
             rows.append(line)
         rows.append("+" + "".join(ch(w[i, 0, 3], "-") + "+" for i in range(n)))

@@ -15,14 +15,18 @@ Three kinds of hazard are placed in random cells (never in the start / goal cell
 * **ramp**  a hump across a straight corridor: up a slope, a short flat top, down again (``ramp_height_range``
             high over ``ramp_length``, 13-22 deg with the defaults).
 * **spike** a bed of sharp, slippery cones (25-35 cm, friction ``spike_friction``) on one side of a straight corridor, from the wall to just past the
-            middle. No extra rule: the cones are just hard to walk on (feet slip off the tips, toes catch), so walking
-            past on the free side is faster and safer. A separate red mesh ``/World/ground/spikes``; the height
-            scanners see the cones.
+            middle ("lane": walk past on the free side). A "slalom" cell has two shorter beds on opposite sides, one
+            after the other: the robot has to cross from one side to the other between them. A separate red mesh
+            ``/World/ground/spikes``; the height scanners see the cones. ``scripts/challenge.py`` makes the beds
+            deadly: any part of the robot inside a bed rectangle below the cone tips = a fall (back to the start).
 
-The maze is a perfect maze plus a fork at the start (``start_fork``): both sides of the start cell are open, which
+The maze is a perfect maze plus a fork at the start (``start_fork``): one more side of the start cell is opened, which
 makes exactly one loop, so there are two routes to the goal. A hazard on the shared part of the routes cannot be
 walked around; elsewhere the robot can take the other way.
-Grid convention, start / goal and origin are the same as :mod:`g1_maze_lab.terrains.maze`.
+Grid convention is the same as :mod:`g1_maze_lab.terrains.maze` (cell ``(i, j)``, ``i`` along +x). By default the
+start is cell ``(0, 0)`` and the goal ``(n-1, n-1)``; with ``random_ends`` both are picked from the seed (at least
+``min_end_distance`` cells apart). The terrain origin (where the robot spawns) is always the centre of the start cell.
+``HAZARDS`` and ``GENERATED`` positions are in the maze frame: relative to the centre of cell ``(0, 0)``.
 """
 
 from __future__ import annotations
@@ -49,7 +53,46 @@ _PENDING_SPIKES: list[trimesh.Trimesh] = []
 HAZARDS: list[dict] = []
 """Hazards of every hazard maze built in this process (generation order):
 {"gap": [(i, j, axis, width)], "ice": [(i, j)], "rough": [(i, j)], "ramp": [(i, j, axis, height)],
- "spike": [(i, j, axis, x0, y0, x1, y1)]} -- a spike bed's rectangle is relative to the start-cell centre."""
+ "spike": [(i, j, axis, x0, y0, x1, y1)], "spike_top": metres, "start": (i, j), "goal": (i, j), "routes": ...}
+-- one entry per spike bed (a slalom cell has two), its rectangle in the maze frame (centre of cell (0, 0))."""
+
+
+def _reach_goal(walls: np.ndarray, start, goal) -> dict:
+    """Steps from every cell to ``goal`` without passing through ``start`` (BFS on the walls)."""
+    n = walls.shape[0]
+    dist = {goal: 0}
+    queue = deque([goal])
+    while queue:
+        i, j = queue.popleft()
+        for d, (di, dj) in enumerate(DIRS):
+            nb = (i + di, j + dj)
+            if not walls[i, j, d] and nb != start and nb not in dist and 0 <= nb[0] < n and 0 <= nb[1] < n:
+                dist[nb] = dist[(i, j)] + 1
+                queue.append(nb)
+    return dist
+
+
+def _open_fork(walls: np.ndarray, start, goal, rng) -> bool:
+    """Perfect maze -> one loop through the start: open one more side of the start cell, towards a neighbour that
+    reaches the goal without the start. Returns False when no side can be opened (pick another maze)."""
+    n = walls.shape[0]
+    reach = _reach_goal(walls, start, goal)
+    cand = [d for d, (di, dj) in enumerate(DIRS)
+            if 0 <= start[0] + di < n and 0 <= start[1] + dj < n and walls[start][d] and (start[0] + di, start[1] + dj) in reach]
+    if not cand:
+        return False
+    d = cand[0] if len(cand) == 1 else cand[rng.integers(len(cand))]
+    di, dj = DIRS[d]
+    walls[start][d] = walls[start[0] + di, start[1] + dj, (d + 2) % 4] = False
+    return True
+
+
+def _pick_ends(n: int, rng, min_dist: int):
+    """Random start and goal cells at least ``min_dist`` apart (Manhattan)."""
+    while True:
+        s, g = tuple(int(v) for v in rng.integers(0, n, 2)), tuple(int(v) for v in rng.integers(0, n, 2))
+        if abs(s[0] - g[0]) + abs(s[1] - g[1]) >= min_dist:
+            return s, g
 
 
 def _straight_cells(walls: np.ndarray) -> list[tuple[int, int, int]]:
@@ -67,25 +110,20 @@ def _straight_cells(walls: np.ndarray) -> list[tuple[int, int, int]]:
     return out
 
 
-def route_pair(walls: np.ndarray) -> tuple[list, list]:
+def route_pair(walls: np.ndarray, start=(0, 0), goal=None) -> tuple[list, ...]:
     """The two routes of a maze with a start fork: (shorter, longer) lists of cells after the start cell.
 
     Distances are taken without passing through the start cell, so each route is the shortest way to the goal
-    after leaving the start to the east or to the north.
+    after leaving the start through one of its open sides. Fewer than two = no fork.
     """
     n = walls.shape[0]
-    goal = (n - 1, n - 1)
-    dist = {goal: 0}
-    queue = deque([goal])
-    while queue:
-        i, j = queue.popleft()
-        for d, (di, dj) in enumerate(DIRS):
-            nb = (i + di, j + dj)
-            if not walls[i, j, d] and nb != (0, 0) and nb not in dist:
-                dist[nb] = dist[(i, j)] + 1
-                queue.append(nb)
+    start = tuple(start)
+    goal = (n - 1, n - 1) if goal is None else tuple(goal)
+    dist = _reach_goal(walls, start, goal)
+    exits = [(start[0] + di, start[1] + dj) for d, (di, dj) in enumerate(DIRS)
+             if not walls[start][d] and (start[0] + di, start[1] + dj) in dist]
     paths = []
-    for first in ((1, 0), (0, 1)):
+    for first in exits:
         path = [first]
         while dist[path[-1]] > 0:
             i, j = path[-1]
@@ -95,9 +133,9 @@ def route_pair(walls: np.ndarray) -> tuple[list, list]:
     return tuple(sorted(paths, key=len))
 
 
-def route_turns(path: list) -> int:
+def route_turns(path: list, start=(0, 0)) -> int:
     """Number of turns walking from the start cell along ``path``."""
-    p = [(0, 0)] + list(path)
+    p = [tuple(start)] + list(path)
     return sum((b[0] - a[0], b[1] - a[1]) != (c[0] - b[0], c[1] - b[1]) for a, b, c in zip(p, p[1:], p[2:]))
 
 
@@ -110,23 +148,32 @@ def _slots(cells: list, straight: set, banned: set) -> list:
     return out
 
 
-def _routes_ok(walls: np.ndarray, routes: tuple[list, list], cfg: HazardMazeTerrainCfg) -> bool:
+def _banned(n: int, start, goal) -> set:
+    """Cells kept free of hazards: the start, its neighbours and the goal."""
+    out = {tuple(start), tuple(goal)}
+    out |= {(start[0] + di, start[1] + dj) for di, dj in DIRS if 0 <= start[0] + di < n and 0 <= start[1] + dj < n}
+    return out
+
+
+def _routes_ok(walls: np.ndarray, routes: tuple[list, ...], cfg: HazardMazeTerrainCfg, start, goal) -> bool:
     """Short route clearly shorter, long route clearly twistier, and room for the hazards on each."""
+    if len(routes) != 2:
+        return False
     short, long = routes
     n = walls.shape[0]
     straight = {s[:2] for s in _straight_cells(walls)}
-    banned = {(0, 0), (1, 0), (0, 1), (n - 1, n - 1)}
+    banned = _banned(n, start, goal)
     short_slots = _slots([x for x in short if x not in long], straight, banned)
     n_short = len(short_slots)
     n_long = len(_slots([x for x in long if x not in short], straight, banned))
     # a hard hazard within the first `peek_cells` cells after the fork: a robot that walks in a little sees it
     near = short_slots and short.index(short_slots[0]) < cfg.peek_cells
-    return (
+    return bool(
         near and
         len(long) - len(short) >= cfg.min_route_gap
-        and route_turns(long) >= route_turns(short) + cfg.min_extra_turns
-        and n_short >= cfg.short_gaps + cfg.short_ramps + cfg.short_spikes
-        and n_long >= cfg.long_ramps + 1
+        and route_turns(long, start) >= route_turns(short, start) + cfg.min_extra_turns
+        and n_short >= cfg.short_gaps + cfg.short_ramps + cfg.short_spikes + cfg.short_slaloms
+        and n_long >= cfg.long_ramps + cfg.long_spikes + cfg.long_slaloms + 1
     )
 
 
@@ -136,26 +183,30 @@ def hazard_maze_terrain(difficulty: float, cfg: HazardMazeTerrainCfg) -> tuple[l
     seed = getattr(cfg, "seed", None)
     rng = np.random.default_rng(None if seed is None else seed + int(difficulty * 1e6))
     routes = None
+    start, goal = (0, 0), (n - 1, n - 1)
     if cfg.layout is not None:
         walls = parse_layout(cfg.layout)
     else:
         for _ in range(cfg.max_tries):
+            if cfg.random_ends:
+                start, goal = _pick_ends(n, rng, cfg.min_end_distance or n)
             walls = generate_maze(n, rng, cfg.open_ratio_range[0])
             if not cfg.start_fork:
                 break
-            # open both sides of the start cell: one loop through the start = two routes to the goal
-            for d in (0, 1):
-                di, dj = DIRS[d]
-                walls[0, 0, d] = walls[di, dj, (d + 2) % 4] = False
-            routes = route_pair(walls)
-            if not cfg.route_split or _routes_ok(walls, routes, cfg):
+            # open one more side of the start cell: one loop through the start = two routes to the goal
+            if not _open_fork(walls, start, goal, rng):
+                continue
+            routes = route_pair(walls, start, goal)
+            if not cfg.route_split or _routes_ok(walls, routes, cfg, start, goal):
                 break
-    GENERATED.append({"open_ratio": cfg.open_ratio_range[0], "walls": walls})
+        else:
+            raise RuntimeError(f"no {n}x{n} hazard maze fits the settings in {cfg.max_tries} tries")
+    GENERATED.append({"open_ratio": cfg.open_ratio_range[0], "walls": walls, "start": start, "goal": goal})
 
     # pick the hazard cells: keep the start, its neighbours and the goal clean.
     # Ramps, spike beds and trenches are never next to each other: two ramps in a row make a V the robot cannot
     # climb out of, and the robot needs a cell to change lanes / square up to a trench.
-    banned = {(0, 0), (1, 0), (0, 1), (n - 1, n - 1)}
+    banned = _banned(n, start, goal)
     straight = {s[:2]: s for s in _straight_cells(walls) if s[:2] not in banned}
     placed = []
 
@@ -184,17 +235,22 @@ def hazard_maze_terrain(difficulty: float, cfg: HazardMazeTerrainCfg) -> tuple[l
         off_route = [(i, j) for i in range(n) for j in range(n) if (i, j) not in short and (i, j) not in long]
         # short route: hard (wide trench, steep ramps, spike beds); long route: easy (low ramps, boxes, ice)
         slots = _slots(short_only, set(straight), banned)
-        kinds = ["gap"] * cfg.short_gaps + ["ramp"] * cfg.short_ramps + ["spike"] * cfg.short_spikes
+        kinds = (["gap"] * cfg.short_gaps + ["ramp"] * cfg.short_ramps + ["spike"] * cfg.short_spikes
+                 + ["slalom"] * cfg.short_slaloms)
         # the first slot (near the fork, see _routes_ok) always gets a hazard the scanner sees well: ramp or spikes
         chosen = [0] + sorted(1 + rng.permutation(len(slots) - 1)[: len(kinds) - 1])
         kinds = [kinds[i] for i in rng.permutation(len(kinds))]
         first = next(i for i, k in enumerate(kinds) if k in ("ramp", "spike"))
         kinds.insert(0, kinds.pop(first))
         kinds = kinds[: len(chosen)]
-        hard = {k: [straight[slots[i]] for i, kk in zip(chosen, kinds) if kk == k] for k in ("gap", "ramp", "spike")}
-        placed += hard["gap"] + hard["ramp"] + hard["spike"]
-        gaps, ramps_s, spikes = hard["gap"], hard["ramp"], hard["spike"]
+        hard = {k: [straight[slots[i]] for i, kk in zip(chosen, kinds) if kk == k]
+                for k in ("gap", "ramp", "spike", "slalom")}
+        placed += hard["gap"] + hard["ramp"] + hard["spike"] + hard["slalom"]
+        gaps, ramps_s = hard["gap"], hard["ramp"]
+        spikes = [(x, "lane") for x in hard["spike"]] + [(x, "slalom") for x in hard["slalom"]]
         ramps_l = pick(long_only, cfg.long_ramps)
+        spikes += [(x, "lane") for x in pick(long_only, cfg.long_spikes)]
+        spikes += [(x, "slalom") for x in pick(long_only, cfg.long_slaloms)]
         ice += free(short_only, cfg.short_ice)
         ice += free(long_only, cfg.long_ice)
         rough += free(long_only, cfg.long_rough)
@@ -213,31 +269,41 @@ def hazard_maze_terrain(difficulty: float, cfg: HazardMazeTerrainCfg) -> tuple[l
         cells = list(straight)
         gaps = pick(cells, cfg.num_gaps)
         ramps = pick(cells, cfg.num_ramps)
-        spikes = pick(cells, cfg.num_spikes)
+        spikes = [(x, "lane") for x in pick(cells, cfg.num_spikes)]
         all_cells = [(i, j) for i in range(n) for j in range(n)]
         ice += free(all_cells, cfg.num_ice)
         rough += free(all_cells, cfg.num_rough)
         gap_widths = rng.uniform(*cfg.gap_width_range, size=len(gaps))
         ramp_heights = rng.uniform(*cfg.ramp_height_range, size=len(ramps))
-    # spike bed: across the corridor from the wall on one side to `reach` past the middle, along it +-half
+    # spike bed: across the corridor from the wall on one side to `reach` past the middle, along it from u0 to u1
+    # (lane: one bed, centred; slalom: two shorter beds on opposite sides with a gap between them)
     n_cells_spk = len(spikes)
     spike_side = rng.choice((-1.0, 1.0), size=n_cells_spk)
     spike_reach = rng.uniform(*cfg.spike_reach_range, size=n_cells_spk)
+    slalom_reach = rng.uniform(*cfg.slalom_reach_range, size=n_cells_spk)
     hw, half = 0.5 * (cfg.cell_size - cfg.wall_thickness), 0.5 * cfg.spike_length
-    spike_rects = []
-    for (i, j, a), sd, r in zip(spikes, spike_side, spike_reach):
-        lo, hi = sorted((sd * hw, -sd * r))
-        if a == 0:  # corridor along x: the bed spans y in [lo, hi]
-            spike_rects.append((i * c - half, j * c + lo, i * c + half, j * c + hi))
-        else:
-            spike_rects.append((i * c + lo, j * c - half, i * c + hi, j * c + half))
+    sl_half, sl_gap = 0.5 * cfg.slalom_length, 0.5 * cfg.slalom_gap
+    spike_rects = []  # (i, j, a, rect)
+    for ((i, j, a), kind), sd, r, rs in zip(spikes, spike_side, spike_reach, slalom_reach):
+        beds = [(sd, r, -half, half)] if kind == "lane" else [(sd, rs, -sl_half, -sl_gap), (-sd, rs, sl_gap, sl_half)]
+        for side, reach, u0, u1 in beds:
+            lo, hi = sorted((side * hw, -side * reach))
+            if a == 0:  # corridor along x: the bed spans y in [lo, hi]
+                rect = (i * c + u0, j * c + lo, i * c + u1, j * c + hi)
+            else:
+                rect = (i * c + lo, j * c + u0, i * c + hi, j * c + u1)
+            spike_rects.append((i, j, a, rect))
     HAZARDS.append(
         {
             "gap": [(int(i), int(j), int(a), float(w)) for (i, j, a), w in zip(gaps, gap_widths)],
             "ice": [tuple(map(int, x)) for x in ice],
             "rough": [tuple(map(int, x)) for x in rough],
             "ramp": [(int(i), int(j), int(a), float(hh)) for (i, j, a), hh in zip(ramps, ramp_heights)],
-            "spike": [(int(i), int(j), int(a), *map(float, r)) for (i, j, a), r in zip(spikes, spike_rects)],
+            "spike": [(int(i), int(j), int(a), *map(float, r)) for i, j, a, r in spike_rects],
+            "slalom": [tuple(map(int, x[:2])) for x, kind in spikes if kind == "slalom"],
+            "spike_top": float(cfg.spike_height_range[1]),
+            "start": tuple(map(int, start)),
+            "goal": tuple(map(int, goal)),
             "routes": None if routes is None else {k: [tuple(map(int, x)) for x in r] for k, r in zip(("short", "long"), routes)},
         }
     )
@@ -298,7 +364,9 @@ def hazard_maze_terrain(difficulty: float, cfg: HazardMazeTerrainCfg) -> tuple[l
     # spike beds: a grid of cones (separate red mesh, see HazardTerrainImporter), relative to the start-cell centre
     _PENDING_SPIKES.clear()
     pitch, rad = cfg.spike_pitch, 0.45 * cfg.spike_pitch
-    for x_lo, y_lo, x_hi, y_hi in spike_rects:
+    sx0, sy0 = start[0] * c, start[1] * c  # maze frame -> start-cell frame
+    for *_, (x_lo, y_lo, x_hi, y_hi) in spike_rects:
+        x_lo, x_hi, y_lo, y_hi = x_lo - sx0, x_hi - sx0, y_lo - sy0, y_hi - sy0
         for px in np.arange(x_lo + rad, x_hi - rad + 1e-6, pitch):
             for py in np.arange(y_lo + rad, y_hi - rad + 1e-6, pitch):
                 ch = rng.uniform(*cfg.spike_height_range)
@@ -322,9 +390,9 @@ def hazard_maze_terrain(difficulty: float, cfg: HazardMazeTerrainCfg) -> tuple[l
     # ice tiles, relative to the start-cell centre (the generator moves them into place)
     _PENDING_ICE.clear()
     for i, j in ice:
-        _PENDING_ICE.append((i * c, j * c, c - t, c - t))
+        _PENDING_ICE.append((i * c - sx0, j * c - sy0, c - t, c - t))
 
-    origin = np.array([x0 + 0.5 * c, y0 + 0.5 * c, 0.0])
+    origin = np.array([x0 + (start[0] + 0.5) * c, y0 + (start[1] + 0.5) * c, 0.0])
     return meshes, origin
 
 
@@ -412,7 +480,11 @@ class HazardMazeTerrainCfg(MazeTerrainCfg):
     open_ratio_range: tuple[float, float] = (0.0, 0.0)
     """Share of inner walls knocked down (first value is used). 0 = perfect maze, one route."""
     start_fork: bool = True
-    """Open both sides of the start cell: two routes to the goal (ignored for a fixed ``layout``)."""
+    """Open one more side of the start cell: two routes to the goal (ignored for a fixed ``layout``)."""
+    random_ends: bool = False
+    """Start and goal cells picked from the seed (off: start (0, 0), goal (n-1, n-1))."""
+    min_end_distance: int | None = None
+    """With ``random_ends``: start and goal at least this many cells apart (Manhattan). None = ``num_cells``."""
     route_split: bool = True
     """With ``start_fork``: make one route short and hard, the other long, twisty and easy (the ``short_*`` and
     ``long_*`` settings below). Off: the ``num_*`` hazards are spread over the whole maze."""
@@ -432,11 +504,16 @@ class HazardMazeTerrainCfg(MazeTerrainCfg):
     short_ramp_height_range: tuple[float, float] = (0.24, 0.3)
     """Steeper than G1 Rough climbs (it gets stuck from ~0.24 m)."""
     short_spikes: int = 2
+    short_slaloms: int = 0
+    """Slalom cells (two beds on opposite sides) on the short route."""
     short_ice: int = 1
     short_rough_fill: bool = True
     """Fill the short route's plain cells with loose boxes (rough floor all the way)."""
     long_ramps: int = 2
     long_ramp_height_range: tuple[float, float] = (0.1, 0.18)
+    long_spikes: int = 0
+    """Spike beds on the long route too (one side of the corridor)."""
+    long_slaloms: int = 0
     long_rough: int = 3
     long_ice: int = 2
     extra_ice: int = 2
@@ -460,10 +537,17 @@ class HazardMazeTerrainCfg(MazeTerrainCfg):
     """Length of each slope along the corridor [m] (0.3 m over 0.75 m = 22 deg, the steepest slope G1 Rough trained on)."""
 
     num_spikes: int = 3
-    spike_reach_range: tuple[float, float] = (0.05, 0.2)
-    """How far the bed reaches past the middle of the corridor [m]; the free lane is 0.7-0.9 m wide."""
+    spike_reach_range: tuple[float, float] = (-0.1, 0.0)
+    """How far the bed reaches past the middle of the corridor [m] (negative = stops short of it); the free lane is
+    0.93-1.03 m wide. The beds are deadly in the challenge, so the lane must fit a walking G1 (feet ~0.25 m apart)."""
     spike_length: float = 1.4
     """Length of the bed along the corridor [m]."""
+    slalom_length: float = 1.8
+    """Slalom cell: both beds together along the corridor [m] ..."""
+    slalom_gap: float = 0.6
+    """... with this gap between them, where the robot crosses to the other side [m]."""
+    slalom_reach_range: tuple[float, float] = (-0.1, 0.0)
+    """How far each slalom bed reaches past the middle of the corridor [m]."""
     spike_pitch: float = 0.15
     spike_height_range: tuple[float, float] = (0.25, 0.35)
 

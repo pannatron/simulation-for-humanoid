@@ -4,9 +4,15 @@ A submission is a folder ``submissions/<team>/`` (upload it with ``scripts/chall
     policy.pt   walking policy checkpoint (rsl_rl ``model_*.pt``, same network as G1 Rough)   required
     pilot.py    your autopilot: ``class Pilot`` (see ``DefaultPilot`` below for the interface)    optional
 
+Levels (--level, or CHALLENGE_LEVEL; see challenge_levels.py):
+    7      7 x 7, start bottom-left, goal top-right, 300 s        (practice)
+    9      9 x 9, same corners, more hazards, a slalom, 480 s     (practice)
+    final  10 x 10, start and goal cells random from the seed, 600 s (the real run)
+    --random-ends on 7 / 9: random start and goal there too (practise for the final)
+
 Usage (from the project folder):
     # watch it: Newton viewer window with the timer (the instructor's screen)
-    uv run python scripts/challenge.py --team team_a --seed 7 --viz newton
+    uv run python scripts/challenge.py --team team_a --level final --seed 7 --viz newton
     # score it without a window
     uv run python scripts/challenge.py --team team_a --seed 7
     # try your own checkpoint / pilot before uploading (nothing is written to the leaderboard)
@@ -14,12 +20,12 @@ Usage (from the project folder):
 
 Rules (the defaults of this script):
     * the clock starts with the robot standing in the start cell; GOAL = within 0.6 m of the goal-cell centre
-    * a fall, a wall touching the arms / torso, or being stuck (< 0.25 m in 10 s) sends the robot back to the
-      start, the clock keeps running (spike beds are only hard to walk on: no extra rule, a stumble is a fall)
-    * after CHALLENGE_TIME seconds (default 300) the run ends: DNF, ranked by how close it got to the goal (metres
+    * a fall, a wall touching the arms / torso, being stuck (< 0.25 m in 10 s) or ANY part of the robot inside a
+      spike bed below the cone tips (SPIKE) sends the robot back to the start, the clock keeps running
+    * after CHALLENGE_TIME seconds (default: the level's limit) the run ends: DNF, ranked by how close it got to the goal (metres
       still to walk along the route it was on, the HUD's "closest"; falling back to the start does not lose it),
       then by fewer falls
-    * everyone gets the same maze: the instructor announces the seed at the start of the challenge
+    * everyone gets the same maze: the instructor announces the level and the seed at the start of the challenge
     * the pilot only uses what the robot sees during the run (obs): no reading the real map (GENERATED / HAZARDS)
       and no files written in one run and read in the next
 
@@ -54,7 +60,10 @@ from g1_maze_lab.autopilot import MazeAutopilot  # noqa: E402
 from g1_maze_lab.tasks.maze.env_cfg import CELL_SIZE, HARD_CELLS  # noqa: E402
 from g1_maze_lab.terrains import GENERATED, HAZARDS, maze_to_ascii  # noqa: E402
 
-TIME_LIMIT = float(os.environ.get("CHALLENGE_TIME", 300))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from challenge_levels import DEFAULT_LEVEL, level_info  # noqa: E402
+
+TIME_LIMIT = 300.0  # set from the level (or CHALLENGE_TIME) in __main__
 STUCK_TIME = 10.0  # not moving 0.25 m in this many seconds = a fall
 CAMERA = os.environ.get("MAZE_CAM", "chase")
 REC_DIR = os.environ.get("MAZE_REC_DIR", "")
@@ -71,22 +80,25 @@ class DefaultPilot:
     """The Lab 7.2 autopilot (flood fill + height scan). Copy this class into your ``pilot.py`` and improve it.
 
     Interface:
-        Pilot(num_envs, num_cells, cell_size, device)
+        Pilot(num_envs, num_cells, cell_size, device, start_cell, goal_cell)   (cells as (i, j) tuples;
+            a pilot whose __init__ has only the first four arguments still runs, but only knows the default corners)
         pilot.act(obs) -> (num_envs, 3) tensor: v_x [m/s], v_y [m/s], w_z [rad/s] in the robot frame
         pilot.reset(env_ids)       called after a fall / crash (the robot is back in the start cell)
 
-    ``obs`` (all torch tensors on ``device``, positions relative to the start-cell centre):
+    ``obs`` (all torch tensors on ``device``, positions relative to the centre of cell (0, 0): cell (i, j) is
+    centred at (i * cell_size, j * cell_size)):
         pos_xy (N, 2), yaw (N,), t (float, seconds since the start), dt (float)
+        start_cell (2,), goal_cell (2,)        long tensors: start and goal cell (i, j)
         scan_xy (N, R, 2), scan_z (N, R)       maze height scanner: 33 x 33 points every 0.1 m around the robot
         lidar_dist (N, 72), lidar_yaw (N, 72)  chest-height lidar: range [m] and world yaw of each ray
         lin_vel_b (N, 3), ang_vel_b (N, 3)     base velocity in the robot frame
     """
 
-    def __init__(self, num_envs, num_cells, cell_size, device):
+    def __init__(self, num_envs, num_cells, cell_size, device, start_cell=(0, 0), goal_cell=None):
         # turn_early / min_speed / max_turn: pick the next cell 0.6 m before the centre and walk the corner as an arc
         self.ap = MazeAutopilot(
             num_envs, num_cells, cell_size, device, strategy="flood", speed=0.6,
-            turn_early=0.6, min_speed=0.3, max_turn=1.0,
+            turn_early=0.6, min_speed=0.3, max_turn=1.0, start=start_cell, goal=goal_cell,
         )
 
     def act(self, obs):
@@ -108,24 +120,49 @@ def load_pilot(path):
     return mod.Pilot
 
 
-def cells_to_goal(walls, n):
+def make_pilot(cls, n_env, n, device, start, goal):
+    """Pilot(..., start_cell, goal_cell); an older pilot with four arguments gets only those."""
+    import inspect
+
+    params = inspect.signature(cls.__init__).parameters
+    if "start_cell" in params or any(p.kind == p.VAR_KEYWORD for p in params.values()):
+        return cls(n_env, n, CELL_SIZE, device, start_cell=start, goal_cell=goal)
+    if start != (0, 0) or goal != (n - 1, n - 1):
+        print("[CHALLENGE] WARNING: this pilot does not take start_cell / goal_cell, it will look for the goal in "
+              "the far corner", flush=True)
+    return cls(n_env, n, CELL_SIZE, device)
+
+
+def cells_to_goal(walls, n, start=(0, 0), goal=None):
     """Steps from every cell to the goal along the real maze (BFS on the true walls).
 
     The way back through the start cell does not count: the maze has two routes that meet only at the start,
     so a robot on the long route is measured along the long route, not "back to the start and the short way".
     """
-    dist = {(n - 1, n - 1): 0}
-    queue = deque([(n - 1, n - 1)])
+    goal = (n - 1, n - 1) if goal is None else tuple(goal)
+    dist = {goal: 0}
+    queue = deque([goal])
     dirs = ((1, 0), (0, 1), (-1, 0), (0, -1))
     while queue:
         i, j = queue.popleft()
         for d, (di, dj) in enumerate(dirs):
             a, b = i + di, j + dj
-            if not walls[i, j, d] and 0 <= a < n and 0 <= b < n and (a, b) not in dist and (a, b) != (0, 0):
+            if not walls[i, j, d] and 0 <= a < n and 0 <= b < n and (a, b) not in dist and (a, b) != start:
                 dist[(a, b)] = dist[(i, j)] + 1
                 queue.append((a, b))
-    dist[(0, 0)] = 1 + min(dist[(di, dj)] for d, (di, dj) in enumerate(dirs[:2]) if not walls[0, 0, d] and (di, dj) in dist)
+    si, sj = start
+    dist[start] = 1 + min(dist[(si + di, sj + dj)] for d, (di, dj) in enumerate(dirs)
+                          if not walls[si, sj, d] and (si + di, sj + dj) in dist)
     return dist
+
+
+def spike_hit(points, beds, top):
+    """True when any of ``points`` (B, 3; maze frame, z above the floor) is inside a spike bed below the cone tips."""
+    for x0, y0, x1, y1 in beds:
+        inside = (points[:, 0] > x0) & (points[:, 0] < x1) & (points[:, 1] > y0) & (points[:, 1] < y1) & (points[:, 2] < top)
+        if bool(inside.any()):
+            return True
+    return False
 
 
 def route_left_m(p, cell, to_goal, walls):
@@ -145,7 +182,7 @@ def route_left_m(p, cell, to_goal, walls):
 
 
 # ----------------------------------------------------------------------------- viewer: timer + camera
-HUD = {"team": "", "seed": "", "t": 0.0, "left": 0, "falls": 0, "goal": None, "flash": False, "limit": TIME_LIMIT,
+HUD = {"team": "", "seed": "", "level": "", "why": "FELL / CRASH", "t": 0.0, "left": 0, "falls": 0, "goal": None, "flash": False, "limit": TIME_LIMIT,
        "dist": 0.0, "best": 0.0, "route": 0.0}
 _CAM = {"yaw": None, "follow": True, "c_down": False}
 
@@ -167,7 +204,7 @@ def _hud(imgui):
     green, orange, red = (imgui.ImVec4(0.48, 0.79, 0.26, 1.0), imgui.ImVec4(0.95, 0.65, 0.35, 1.0),
                           imgui.ImVec4(0.95, 0.3, 0.3, 1.0))
     imgui.begin("challenge timer", None, flags)
-    imgui.text_colored(green, f"CHALLENGE 7.5  |  {HUD['team']}  |  seed {HUD['seed']}")
+    imgui.text_colored(green, f"CHALLENGE 7.5  |  {HUD['team']}  |  level {HUD['level']}  seed {HUD['seed']}")
     imgui.push_font(None, 2.0 * imgui.get_font_size())
     if HUD["goal"] is not None:
         imgui.text_colored(green, HUD["goal"])
@@ -178,7 +215,7 @@ def _hud(imgui):
     imgui.text(f"to goal {HUD['dist']:4.1f} m   closest {HUD['best']:4.1f} m")
     imgui.text(f"cells to goal {HUD['left']}   falls {HUD['falls']}   limit {HUD['limit']:.0f} s")
     if HUD["flash"]:
-        imgui.text_colored(orange, "FELL / CRASH -> back to start")
+        imgui.text_colored(orange, f"{HUD['why']} -> back to start")
     imgui.end()
 
 
@@ -206,9 +243,11 @@ def _yaw(q):
 
 
 def _set_camera(viewer, robot, origin):
+    """``origin`` = world position of the centre of cell (0, 0)."""
     if CAMERA == "top":
-        c = (origin[:2] + 0.5 * (HARD_CELLS - 1) * CELL_SIZE).tolist()
-        viewer.set_camera(wp.vec3(c[0], c[1] - 4.5, 17.0), -75.0, 90.0)
+        n = MAZE["n"]
+        c = (origin[:2] + 0.5 * (n - 1) * CELL_SIZE).tolist()
+        viewer.set_camera(wp.vec3(c[0], c[1] - 4.5 * n / 7, 17.0 * n / 7), -75.0, 90.0)
         return
     if CAMERA.startswith("look:"):  # look:i,j = fixed camera on cell (i, j), from above and to the west
         i, j = (int(v) for v in CAMERA[5:].split(","))
@@ -242,9 +281,10 @@ def _markers(env):
         },
     )
     m = VisualizationMarkers(cfg)
-    o = env.scene.env_origins[:1]
+    o = env.scene.env_origins[:1]  # start-cell centre
     goal = o.clone()
-    goal[:, :2] += (HARD_CELLS - 1) * CELL_SIZE
+    goal[0, 0] += (MAZE["goal"][0] - MAZE["start"][0]) * CELL_SIZE
+    goal[0, 1] += (MAZE["goal"][1] - MAZE["start"][1]) * CELL_SIZE
     m.visualize(translations=torch.cat((goal, o)) + 0.025, marker_indices=torch.tensor([0, 1], device=env.device))
     return m
 
@@ -314,7 +354,8 @@ class _Recorder:
         d = ImageDraw.Draw(im, "RGBA")
         big, small = self.big, self.small
         d.rounded_rectangle((16, 16, 470, 182), 14, fill=(14, 22, 33, 215))
-        d.text((32, 24), f"CHALLENGE 7.5 · {hud['team']} · seed {hud['seed']}", font=small, fill=(122, 201, 67))
+        d.text((32, 24), f"CHALLENGE 7.5 · {hud['team']} · L{hud['level']} · seed {hud['seed']}", font=small,
+               fill=(122, 201, 67))
         d.text((32, 54), f"{hud['t']:6.1f} s", font=big, fill=(244, 243, 238))
         d.text((32, 108), f"to goal {hud['dist']:4.1f} m   closest {hud['best']:4.1f} m", font=small,
                fill=(244, 243, 238))
@@ -326,7 +367,7 @@ class _Recorder:
         )
         if hud["flash"]:
             d.rounded_rectangle((500, 16, 940, 80), 14, fill=(184, 40, 40, 220))
-            d.text((522, 32), "FELL / CRASH -> back to start", font=small, fill=(255, 255, 255))
+            d.text((522, 32), f"{hud['why']} -> back to start", font=small, fill=(255, 255, 255))
         if hud["goal"] is not None:
             d.rounded_rectangle((500, 16, 900, 84), 14, fill=(61, 122, 18, 230))
             d.text((522, 26), hud["goal"], font=big, fill=(255, 255, 255))
@@ -347,7 +388,8 @@ def _snap(viewer, t):
 
 
 # ----------------------------------------------------------------------------- the run
-RUN = {"team": "", "seed": 0, "pilot": "", "policy": "", "score": True}
+RUN = {"team": "", "seed": 0, "level": DEFAULT_LEVEL, "pilot": "", "policy": "", "score": True}
+MAZE = {"n": HARD_CELLS, "start": (0, 0), "goal": (HARD_CELLS - 1, HARD_CELLS - 1)}
 
 
 def challenge_playback(step, *, dt, args_cli, env_cfg):
@@ -358,43 +400,55 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
     cmd.is_heading_env[:] = False
     cmd.is_standing_env[:] = False
     scanner, lidar = env.scene["maze_scanner"], env.scene["wall_lidar"]
-    n_env, n = env.num_envs, HARD_CELLS
+    walls, hazards = GENERATED[-1]["walls"], HAZARDS[-1]
+    n_env, n = env.num_envs, walls.shape[0]
+    start, goal = tuple(hazards["start"]), tuple(hazards["goal"])
+    MAZE.update(n=n, start=start, goal=goal)
     # the robot that reaches the goal stays there (the run is over)
     env.termination_manager.get_term_cfg("goal_reached").func = lambda env, **kw: torch.zeros(
         env.num_envs, dtype=torch.bool, device=env.device
     )
 
-    walls, hazards = GENERATED[-1]["walls"], HAZARDS[-1]
-    to_goal = cells_to_goal(walls, n)
-    print(f"[CHALLENGE] seed {RUN['seed']}  maze {n}x{n}, shortest route {to_goal[(0, 0)]} cells", flush=True)
-    print("[CHALLENGE] hazards: " + ", ".join(f"{k} {len(v)}" for k, v in hazards.items() if k != "routes"), flush=True)
+    to_goal = cells_to_goal(walls, n, start, goal)
+    beds = [tuple(b[3:]) for b in hazards["spike"]]
+    spike_top = hazards["spike_top"] + 0.02
+    print(f"[CHALLENGE] level {RUN['level']} seed {RUN['seed']}  maze {n}x{n}, start {start} goal {goal}, "
+          f"shortest route {to_goal[start]} cells", flush=True)
+    print("[CHALLENGE] hazards: " + ", ".join(f"{k} {len(v)}" for k, v in hazards.items()
+                                              if isinstance(v, list)), flush=True)
     if os.environ.get("CHALLENGE_SHOW_MAZE") == "1":  # instructor only: print the solution maze
         print(maze_to_ascii(walls), "\n", hazards, flush=True)
 
-    pilot = load_pilot(RUN["pilot"])(n_env, n, CELL_SIZE, env.device)
+    pilot = make_pilot(load_pilot(RUN["pilot"]), n_env, n, env.device, start, goal)
     viewer = _find_viewer()
     if viewer is not None:
         markers = _markers(env)  # noqa: F841
         viewer.register_ui_callback(_hud, position="free")
-    HUD.update(team=RUN["team"] or "(test)", seed=RUN["seed"])
+    HUD.update(team=RUN["team"] or "(test)", seed=RUN["seed"], level=RUN["level"])
     recorder = _Recorder() if viewer is not None and REC else None
 
     stuck_ref = (0.0, 0.0)
     snap_steps = {int(round(float(x) / dt)) for x in SNAP_AT.split(",")} if SNAP_AT else set()
-    falls, best_left, finish, cell = 0, to_goal[(0, 0)], None, (0, 0)
-    route_m = to_goal[(0, 0)] * CELL_SIZE  # start-cell centre -> goal-cell centre along the shortest route
+    falls, best_left, finish, cell = 0, to_goal[start], None, start
+    route_m = to_goal[start] * CELL_SIZE  # start-cell centre -> goal-cell centre along the shortest route
+    start_t = torch.tensor(start, dtype=torch.long, device=env.device)
+    goal_t = torch.tensor(goal, dtype=torch.long, device=env.device)
+    why = "FELL / CRASH"
     dist_m = best_m = route_m  # metres still to walk to the goal: now / the least so far
     last_fall_t = -10.0
     wall_t0 = time.time()
     steps = int(TIME_LIMIT / dt)
     for k in range(steps):
-        o = env.scene.env_origins
+        o = env.scene.env_origins.clone()  # -> centre of cell (0, 0): positions in the maze frame
+        o[:, :2] -= start_t.float() * CELL_SIZE
         pos_xy = robot.data.root_pos_w.torch[:, :2] - o[:, :2]
         obs = {
             "pos_xy": pos_xy,
             "yaw": _yaw(robot.data.root_quat_w.torch),
             "t": k * dt,
             "dt": dt,
+            "start_cell": start_t,
+            "goal_cell": goal_t,
             "scan_xy": torch.nan_to_num(scanner.data.ray_hits_w.torch[..., :2], nan=0.0) - o[:, None, :2],
             "scan_z": torch.nan_to_num(scanner.data.ray_hits_w.torch[..., 2], nan=0.0, posinf=0.0, neginf=0.0)
             - o[:, None, 2],
@@ -420,7 +474,7 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
 
         t = (k + 1) * dt
         prev_cell = cell
-        p = (robot.data.root_pos_w.torch[0, :2] - env.scene.env_origins[0, :2]).tolist()
+        p = (robot.data.root_pos_w.torch[0, :2] - o[0, :2]).tolist()
         cell = (min(max(round(p[0] / CELL_SIZE), 0), n - 1), min(max(round(p[1] / CELL_SIZE), 0), n - 1))
         left = to_goal.get(cell, best_left)
         best_left = min(best_left, left)
@@ -428,7 +482,7 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
         if rem is not None and finish is None:
             dist_m = rem
             best_m = min(best_m, dist_m)
-        if finish is None and math.dist(p, ((n - 1) * CELL_SIZE,) * 2) < 0.6:
+        if finish is None and math.dist(p, (goal[0] * CELL_SIZE, goal[1] * CELL_SIZE)) < 0.6:
             finish = t
             dist_m = best_m = 0.0
             print(f"[CHALLENGE] GOAL at {t:.1f} s, falls {falls}", flush=True)
@@ -439,13 +493,27 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
                     env._reset_idx(torch.arange(n_env, device=env.device))
                     env.reset_buf[:] = True
                 print(f"[CHALLENGE] t={t:.1f}s stuck for {STUCK_TIME:.0f} s in cell {cell}", flush=True)
-                p = [0.0, 0.0]  # back at the start
+                why = "STUCK"
+                p = [start[0] * CELL_SIZE, start[1] * CELL_SIZE]  # back at the start
             stuck_ref = p
+        # spikes are deadly: any body of the robot inside a bed, lower than the cone tips
+        if finish is None and beds and not bool(env.reset_buf[0]):
+            bodies = robot.data.body_pos_w.torch[0].clone()
+            bodies[:, :2] -= o[0, :2]
+            bodies[:, 2] -= o[0, 2]
+            if spike_hit(bodies, beds, spike_top):
+                with torch.inference_mode():
+                    env._reset_idx(torch.arange(n_env, device=env.device))
+                    env.reset_buf[:] = True
+                print(f"[CHALLENGE] t={t:.1f}s SPIKE in cell {cell}", flush=True)
+                why = "SPIKE"
+                stuck_ref = [start[0] * CELL_SIZE, start[1] * CELL_SIZE]
         if finish is None and bool(env.reset_buf[0]) and k + 1 < steps:  # fell / crashed / stuck: back to start
             falls += 1
             last_fall_t = t
             pilot.reset(torch.arange(n_env, device=env.device))
             print(f"[CHALLENGE] t={t:.1f}s fall/crash #{falls} in cell {prev_cell} -> back to start", flush=True)
+            HUD["why"], why = why, "FELL / CRASH"
         HUD.update(
             t=finish if finish is not None else t,
             left=0 if finish is not None else left,
@@ -487,10 +555,10 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
             w = csv.writer(f)
             if new:
                 w.writerow(["team", "seed", "result", "time_s", "cells_to_goal", "falls", "finished_at", "best_left_m",
-                            "route_m"])
+                            "route_m", "level"])
             w.writerow(
                 [RUN["team"], RUN["seed"], result, f"{finish:.1f}" if finish is not None else "", best_left if finish is None else 0,
-                 falls, time.strftime("%Y-%m-%d %H:%M:%S"), f"{best_m:.1f}", f"{route_m:.0f}"]
+                 falls, time.strftime("%Y-%m-%d %H:%M:%S"), f"{best_m:.1f}", f"{route_m:.0f}", RUN["level"]]
             )
         print(f"[CHALLENGE] written to {os.path.abspath(path)}", flush=True)
     if recorder is not None:
@@ -509,7 +577,12 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=int(os.environ.get("CHALLENGE_SEED", 2026)))
     parser.add_argument("--policy", default="")
     parser.add_argument("--pilot", default="")
+    parser.add_argument("--level", default=os.environ.get("CHALLENGE_LEVEL", DEFAULT_LEVEL))
+    parser.add_argument("--random-ends", action="store_true", help="random start / goal on level 7 or 9 too")
     ours, rest = parser.parse_known_args(sys.argv[1:])
+    lv = level_info(ours.level)
+    TIME_LIMIT = float(os.environ.get("CHALLENGE_TIME", lv["time"]))
+    HUD["limit"] = TIME_LIMIT
     if ours.team:
         folder = os.path.join(SUBMISSIONS, ours.team)
         ours.policy = ours.policy or os.path.join(folder, "policy.pt")
@@ -517,10 +590,12 @@ if __name__ == "__main__":
             ours.pilot = os.path.join(folder, "pilot.py")
     if not ours.policy:
         ours.policy = os.path.join(HERE, "..", "pretrained", "g1_rough", "model_pretrained.pt")
-    RUN.update(team=ours.team, seed=ours.seed, pilot=ours.pilot, policy=ours.policy, score=bool(ours.team))
+    RUN.update(team=ours.team, seed=ours.seed, level=ours.level, pilot=ours.pilot, policy=ours.policy,
+               score=bool(ours.team))
     print(f"[CHALLENGE] policy {ours.policy}  pilot {ours.pilot or '(default flood autopilot)'}", flush=True)
     play_rsl_rl.run(
-        ["--task", "G1-Maze-Hard", "--num_envs", "1", "--checkpoint", ours.policy]
+        ["--task", lv["task"], "--num_envs", "1", "--checkpoint", ours.policy]
         + rest
         + [f"env.scene.terrain.terrain_generator.seed={ours.seed}"]
+        + (["env.scene.terrain.terrain_generator.sub_terrains.hazard_maze.random_ends=true"] if ours.random_ends else [])
     )

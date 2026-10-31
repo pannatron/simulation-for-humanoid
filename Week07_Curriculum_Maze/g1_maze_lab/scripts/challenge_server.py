@@ -3,6 +3,7 @@
     uv run python scripts/challenge_server.py           # students:  http://<this-machine-ip>:8000
                                                         # projector: http://<this-machine-ip>:8000/board
     CHALLENGE_PORT=8080 CHALLENGE_SEED=13 uv run python scripts/challenge_server.py
+    CHALLENGE_LEVEL=9 CHALLENGE_SEED=13 uv run python scripts/challenge_server.py   # level 7 (default) / 9 / final
 
 Teams upload policy.pt (required), pilot.py (optional) and helper .py files their pilot imports. Each upload is
 checked: the policy must have the same network as G1 Rough, every .py file must compile. Files land in
@@ -23,6 +24,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import time
 from email.parser import BytesParser
 from email.policy import HTTP
@@ -31,8 +33,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HERE = os.path.dirname(os.path.abspath(__file__))
 SUBMISSIONS = os.environ.get("CHALLENGE_DIR", os.path.join(HERE, "..", "submissions"))
 PORT = int(os.environ.get("CHALLENGE_PORT", 8000))
+sys.path.insert(0, HERE)
+from challenge_levels import DEFAULT_LEVEL, level_info  # noqa: E402
+
 SEED = os.environ.get("CHALLENGE_SEED", "")  # announced seed of the round (shown on the pages)
-LIMIT = os.environ.get("CHALLENGE_TIME", "300")
+LEVEL = os.environ.get("CHALLENGE_LEVEL", DEFAULT_LEVEL)  # announced level of the round
+LIMIT = os.environ.get("CHALLENGE_TIME", str(level_info(LEVEL)["time"]))
 MAX_BYTES = 60 * 1024 * 1024
 REF_POLICY = os.path.join(HERE, "..", "pretrained", "g1_rough", "model_pretrained.pt")
 TEAM_RE = r"[A-Za-z0-9][A-Za-z0-9_\-]{1,31}"
@@ -132,6 +138,7 @@ def board_data():
     if os.path.exists(path):
         with open(path) as f:
             rows = list(csv.DictReader(f))
+    rows = [r for r in rows if (r.get("level") or "7") == LEVEL]  # this level only
     if SEED:  # this round only: every team on the announced maze
         rows = [r for r in rows if r["seed"] == SEED]
     best, runs = {}, {}
@@ -155,12 +162,13 @@ def board_data():
     status = {}
     for t in teams:  # a team run on another seed is still waiting for this round
         s = st.get(t, {"state": "waiting"})
-        status[t] = s if not SEED or str(s.get("seed", SEED)) == SEED or s.get("state") == "running" else {"state": "waiting"}
+        same = (not SEED or str(s.get("seed", SEED)) == SEED) and str(s.get("level", LEVEL)) == LEVEL
+        status[t] = s if same or s.get("state") == "running" else {"state": "waiting"}
     running = next((t for t, s in st.items() if s.get("state") == "running"), None)
     queue = sorted((t for t, s in status.items() if s.get("state") == "waiting"),
                    key=lambda t: (st.get(t, {}).get("uploaded_at", 0), t))  # same order as challenge_runner.py
     return {"ranked": ranked, "status": status, "running": running, "queue": queue, "replays": replays(),
-            "seed": SEED, "limit": LIMIT, "updated": time.strftime("%H:%M:%S")}
+            "seed": SEED, "level": LEVEL, "limit": LIMIT, "updated": time.strftime("%H:%M:%S")}
 
 
 def replays():
@@ -172,7 +180,7 @@ def replays():
                 r = json.load(f)
         except (OSError, ValueError):
             continue
-        if (not SEED or str(r.get("seed")) == SEED) and os.path.exists(os.path.join(SUBMISSIONS, "_replays", r["video"])):
+        if (not SEED or str(r.get("seed")) == SEED) and str(r.get("level", "7")) == LEVEL and os.path.exists(os.path.join(SUBMISSIONS, "_replays", r["video"])):
             out[r["team"]] = r
     return out
 
@@ -296,7 +304,8 @@ def live_html(data):
 
 
 def chips(data):
-    seed = f'<span>seed <b>{html.escape(data["seed"])}</b></span>' if data["seed"] else ""
+    seed = f'<span>ด่าน <b>{html.escape(data["level"])}</b></span>'
+    seed += f'<span>seed <b>{html.escape(data["seed"])}</b></span>' if data["seed"] else ""
     return (f'<div class="chips">{seed}<span>เวลาสูงสุด <b>{data["limit"]} วินาที</b></span>'
             f'<span>อัปเดต <b id="upd">{data["updated"]}</b></span></div>')
 
@@ -433,7 +442,7 @@ def student_page(msg=""):
             + '<button type="submit">ส่งงาน</button></form></div>'
             + '<div class="card"><h3>กติกาสั้น ๆ</h3><ul style="line-height:1.8;color:var(--soft)">'
             + "<li>ถึงเส้นชัยเร็วสุดชนะ ไม่ถึงดูว่าใครเหลือระยะน้อยกว่า</li><li>ล้ม ชนกำแพง หรือค้าง 10 วินาที กลับไปเริ่มใหม่ นาฬิกาเดินต่อ</li>"
-            + "<li>pilot ใช้ได้แค่ข้อมูลที่หุ่นเห็นตอนวิ่ง ห้ามอ่านแผนที่</li><li>ทุกทีมวิ่งด่านเดียวกัน ครูประกาศ seed ตอนแข่ง</li></ul>"
+            + "<li>pilot ใช้ได้แค่ข้อมูลที่หุ่นเห็นตอนวิ่ง ห้ามอ่านแผนที่</li><li>แตะแปลงหนามสีแดง = ล้ม กลับไปเริ่มใหม่</li><li>ทุกทีมวิ่งด่านเดียวกัน ครูประกาศด่านและ seed ตอนแข่ง</li></ul>"
             + '<small class="u">หน้าจอสำหรับโปรเจกเตอร์: <a style="color:var(--green)" href="/board">/board</a></small></div></div>'
             + '<h2 style="margin-top:12px">อันดับตอนนี้</h2><div id="live">' + board_part(data) + "</div>" + REFRESH_JS
             + "</div></body></html>")
@@ -558,7 +567,8 @@ class Handler(BaseHTTPRequestHandler):
         for fname, data in saved:
             with open(os.path.join(folder, fname), "wb") as f:
                 f.write(data)
-        for old in glob.glob(os.path.join(SUBMISSIONS, "_replays", f"{team}_seed*.*")):  # replays of the old upload
+        for old in glob.glob(os.path.join(SUBMISSIONS, "_replays", f"{team}_seed*.*")) + glob.glob(
+                os.path.join(SUBMISSIONS, "_replays", f"{team}_L*_seed*.*")):  # replays of the old upload
             os.remove(old)
         with status_lock():
             st = load_status()

@@ -54,11 +54,18 @@ Settings: `MAZE_STRATEGY=left|right|flood`, `MAZE_SENSOR=height|lidar`, `MAZE_SP
 Change the sensor from the command line, e.g. `env.scene.maze_scanner.pattern_cfg.resolution=0.2`.
 
 ## Challenge 7.5 — G1 Hazard Maze (extra)
-Task `G1-Maze-Hard`: random 7 x 7 maze (seed), 300 s. Two ways out of the start: a SHORT route with hard
-hazards (a trench 0.15-0.22 m, 2 steep ramps 0.24-0.30 m, 2 spike beds, ice) and a LONG, twisty route with easy ones
-(2 low ramps 0.10-0.18 m, loose boxes, ice). The first hard hazard of the short route is 1-2 cells after the fork,
-so walking in a little shows it. Spike beds: red cones 25-35 cm, slippery, on one side of a corridor (no extra rule,
-just hard to walk on). A DNF is ranked by how close the robot got to the goal along the route it was on.
+Levels (`--level`, same for `challenge.py`, `challenge_runner.py` and `CHALLENGE_LEVEL` for the server):
+`7` = task `G1-Maze-Hard`, 7 x 7 cells, 300 s; `9` = task `G1-Maze-Hard9`, 9 x 9, 480 s, more hazards (2 trenches,
+a slalom spike cell, spikes on the long route). Start = bottom-left cell, goal = top-right; `--random-ends` picks both
+from the seed (the final level does that, on a bigger 10 x 10 maze; it comes with the challenge day).
+Two ways out of the start: a SHORT route with hard hazards (trenches 0.15-0.22 m, steep ramps 0.24-0.30 m, spike beds,
+ice, rough floor all the way) and a LONG, twisty route with easier ones (low ramps 0.10-0.18 m, loose boxes, ice, and
+spike beds too). The first hard hazard of the short route is 1-2 cells after the fork, so walking in a little shows it.
+**Spike beds are deadly:** red cones 25-35 cm on one side of a corridor (a 0.93-1.03 m free lane on the other side);
+any part of the robot inside a bed below the cone tips = a fall (back to the start). A slalom cell has two beds on
+opposite sides with a 0.6 m gap between them. A DNF is ranked by how close the robot got to the goal along the route
+it was on. The pilot gets `Pilot(num_envs, num_cells, cell_size, device, start_cell, goal_cell)`; positions in `obs`
+are relative to the centre of cell (0, 0).
 Starter for training (`G1-Hazard-Starter`, `src/g1_maze_lab/tasks/hazard_starter/`): G1 Rough on Isaac Lab's
 built-in gaps / slopes / boxes / bumps + random foot friction 0.2-1.0 (ice). It trains as it is; copy the folder,
 rename the task and make the ground more like the maze (see the TODO in `env_cfg.py`).
@@ -86,7 +93,7 @@ Submit `policy.pt` (required, same network as G1 Rough: checked on upload), `pil
 `GENERATED`, `HAZARDS`, `HARD_CELLS` or `g1_maze_lab.terrains` are refused on upload). A run longer than
 `--timeout` seconds of wall clock (default 3 x 300 + 180) is stopped and shown as an error (a pilot that hangs).
 A team that is running cannot upload until its run ends.
-The leaderboard shows the round's seed only (`CHALLENGE_SEED`), best run per team; run logs: `submissions/_logs/`, replay videos (the latest run of each team, recorded from the Newton viewer: a run takes about 1.2x its maze time, `--no-replay` runs without a window, about 2x faster): `submissions/_replays/`. A fall, a crash or being stuck 10 s sends the robot back to the start; the clock keeps running.
+The leaderboard shows the round's seed only (`CHALLENGE_SEED`), best run per team; run logs: `submissions/_logs/`, replay videos (the latest run of each team, recorded from the Newton viewer: a run takes about 1.2x its maze time, `--no-replay` runs without a window, about 2x faster): `submissions/_replays/`. A fall, a crash, touching a spike bed or being stuck 10 s sends the robot back to the start; the clock keeps running.
 
 ## Tests
 `uv run pytest tests` checks the maze generator and the planner without the simulator (a robot that jumps cell to cell).

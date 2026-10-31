@@ -31,5 +31,6 @@ _register("G1-Maze-Levels", "G1MazeLevelsEnvCfg", "G1MazePPORunnerCfg")
 # Week 3 G1 Flat walking policy (pretrained/g1_flat/model_pretrained.pt)
 _register("G1-Maze-Challenge-FlatPolicy", "G1MazeFlatPolicyEnvCfg", "G1MazeFlatPolicyPPORunnerCfg")
 _register("G1-Maze-Open-FlatPolicy", "G1MazeOpenFlatPolicyEnvCfg", "G1MazeFlatPolicyPPORunnerCfg")
-# Challenge 7.5: random 7 x 7 hazard maze (gaps, ice, rough floor), scripts/challenge.py
+# Challenge 7.5: random hazard mazes 7 x 7 / 9 x 9 (practice levels), scripts/challenge.py
 _register("G1-Maze-Hard", "G1MazeHardEnvCfg", "G1MazePPORunnerCfg")
+_register("G1-Maze-Hard9", "G1MazeHard9EnvCfg", "G1MazePPORunnerCfg")

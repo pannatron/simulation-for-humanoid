@@ -231,15 +231,22 @@ class G1MazeLevelsEnvCfg(G1MazeEnvCfg):
 
 
 # ---------------------------------------------------------------- Challenge 7.5: hazard maze
-HARD_CELLS = 7  # 7 x 7 cells of 2 m, perfect maze (one route), gaps / ice / rough cells
+HARD_CELLS = 7  # level 7: 7 x 7 cells of 2 m (levels 9 and final are bigger, see HAZARD_LEVELS)
+
+# hazards per level (HazardMazeTerrainCfg fields); spike beds are deadly on every level (scripts/challenge.py)
+HAZARD_LEVELS = {
+    7: dict(num_cells=7, long_spikes=1),
+    9: dict(num_cells=9, short_gaps=2, short_slaloms=1, long_ramps=3, long_spikes=2, long_rough=4, long_ice=3),
+}
+# the final level (10 x 10, random start / goal) is in tasks/challenge_final (instructor only)
 
 
-def setup_hazard_maze(cfg, num_rows: int = 1, num_cols: int = 1, **hazards):
+def setup_hazard_maze(cfg, num_rows: int = 1, num_cols: int = 1, num_cells: int = HARD_CELLS, **hazards):
     """Turn a maze env config into the hazard maze of the challenge (see ``terrains/hazard_maze.py``)."""
     setup_maze(cfg, None, num_rows, num_cols)
     old = cfg.scene.terrain
     gen = old.terrain_generator
-    side = HARD_CELLS * CELL_SIZE + 1.0
+    side = num_cells * CELL_SIZE + 1.0
     cfg.scene.terrain = HazardTerrainImporterCfg(
         prim_path=old.prim_path,
         terrain_type="generator",
@@ -256,7 +263,7 @@ def setup_hazard_maze(cfg, num_rows: int = 1, num_cols: int = 1, **hazards):
             seed=2026,
             sub_terrains={
                 "hazard_maze": HazardMazeTerrainCfg(
-                    proportion=1.0, num_cells=HARD_CELLS, cell_size=CELL_SIZE, wall_height=1.0, **hazards
+                    proportion=1.0, num_cells=num_cells, cell_size=CELL_SIZE, wall_height=1.0, **hazards
                 )
             },
         ),
@@ -266,15 +273,25 @@ def setup_hazard_maze(cfg, num_rows: int = 1, num_cols: int = 1, **hazards):
         visual_material=old.visual_material,
         debug_vis=False,
     )
-    cfg.terminations.goal_reached.params["num_cells"] = HARD_CELLS
-    cfg.episode_length_s = 300.0
+    cfg.terminations.goal_reached.params["num_cells"] = num_cells
+    cfg.episode_length_s = 600.0
 
 
 @configclass
 class G1MazeHardEnvCfg(G1MazeEnvCfg):
-    """Challenge 7.5: one robot, one random 7 x 7 hazard maze. New maze: ``env.scene.terrain.terrain_generator.seed=<n>``."""
+    """Challenge 7.5 level 7: one robot, one random 7 x 7 hazard maze.
+    New maze: ``env.scene.terrain.terrain_generator.seed=<n>``."""
+
+    level = 7
 
     def __post_init__(self):
         super().__post_init__()
-        setup_hazard_maze(self)
+        setup_hazard_maze(self, **HAZARD_LEVELS[self.level])
         self.scene.num_envs = 1
+
+
+@configclass
+class G1MazeHard9EnvCfg(G1MazeHardEnvCfg):
+    """Challenge 7.5 level 9: 9 x 9, more hazards, a slalom spike cell."""
+
+    level = 9
