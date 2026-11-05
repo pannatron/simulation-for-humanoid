@@ -12,6 +12,7 @@ Training on a 6 GB laptop GPU: fine-tune the pretrained G1 Rough checkpoint for 
 """
 
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
+from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.utils import configclass
 
 from isaaclab_tasks.core.velocity.config.g1.rough_env_cfg import G1RoughEnvCfg
@@ -136,3 +137,66 @@ class G1CurriculumActionRateEnvCfg(G1CurriculumBaseEnvCfg):
                 },
             },
         )
+
+
+# ---------------------------------------------------------------- more examples (see the slides)
+def ramp(address: str, start_it: int, end_it: int, start, end) -> CurrTerm:
+    """One line per knob: move the value at ``address`` from ``start`` to ``end`` between two iterations."""
+    return CurrTerm(
+        func=mdp.Ramp,
+        params={"address": address, "start_it": start_it, "end_it": end_it, "start": start, "end": end},
+    )
+
+
+@configclass
+class G1CurriculumKnobsEnvCfg(G1CurriculumBaseEnvCfg):
+    """Six more knobs at once. It proves the addresses work; try one at a time to measure what each one does."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        c = self.curriculum
+        c.smooth = ramp("rewards.action_rate_l2.weight", 0, 80, -0.005, -0.02)
+        c.turn = ramp("commands.base_velocity.ranges.ang_vel_z", 0, 80, (-0.5, 0.5), (-1.0, 1.0))
+        c.push_x = ramp("events.push_robot.params.velocity_range.x", 0, 80, (-0.5, 0.5), (-1.0, 1.0))
+        c.push_y = ramp("events.push_robot.params.velocity_range.y", 0, 80, (-0.5, 0.5), (-1.0, 1.0))
+        c.wind = ramp("events.base_external_force_torque.params.force_range", 20, 100, (0.0, 0.0), (-20.0, 20.0))
+        c.bad_start = ramp("events.reset_base.params.velocity_range.roll", 0, 80, (-0.1, 0.1), (-0.5, 0.5))
+        c.noise_min = ramp("observations.policy.joint_vel.noise.n_min", 0, 80, -0.5, -1.5)
+        c.noise_max = ramp("observations.policy.joint_vel.noise.n_max", 0, 80, 0.5, 1.5)
+
+
+@configclass
+class G1CurriculumTerrainRuleEnvCfg(G1CurriculumBaseEnvCfg):
+    """Same field name as G1 Rough's term, so this replaces its terrain rule."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.curriculum.terrain_levels = CurrTerm(func=mdp.terrain_no_fall)
+
+
+@configclass
+class G1CurriculumDifficultyEnvCfg(G1CurriculumBaseEnvCfg):
+    """One difficulty number (Isaac Lab's ``DifficultyScheduler``) drives two knobs."""
+
+    def __post_init__(self):
+        super().__post_init__()
+        # below 10 % difficulty the knobs keep their config value, so the config must hold the easy value
+        self.commands.base_velocity.ranges.ang_vel_z = (-0.5, 0.5)
+        self.rewards.success = RewTerm(func=mdp.SurvivedSuccess, weight=1e-6)  # weight 0 would skip the term
+        self.curriculum.difficulty = CurrTerm(
+            func=mdp.DifficultyScheduler,
+            params={"init_difficulty": 0, "max_difficulty": 2, "success_term_name": "success"},
+        )
+        self.curriculum.turn = _follow_difficulty("commands.base_velocity.ranges.ang_vel_z", (-0.5, 0.5), (-1.0, 1.0))
+        self.curriculum.push_x = _follow_difficulty("events.push_robot.params.velocity_range.x", (-0.5, 0.5), (-1.5, 1.5))
+
+
+def _follow_difficulty(address: str, easy, hard) -> CurrTerm:
+    return CurrTerm(
+        func=mdp.modify_term_cfg,
+        params={
+            "address": address,
+            "modify_fn": mdp.initial_final_interpolate_fn,
+            "modify_params": {"initial_value": easy, "final_value": hard, "difficulty_term_str": "difficulty"},
+        },
+    )

@@ -15,6 +15,8 @@ term                           what it changes
 RewardWeightRampCurriculum     a reward weight, linearly between two training steps
 AdaptivePushCurriculum         push strength, up when few robots fall, down when many fall
 CommandRangeCurriculum         the max forward speed command, up when tracking is good
+Ramp                           any config value, linearly between two iterations
+terrain_no_fall                the terrain row, with falls moving the robot down
 =============================  ==================================================================
 
 Every term is called by the curriculum manager **when environments reset** (``env_ids`` = the robots
@@ -30,10 +32,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+import torch
+
+from isaaclab.envs.mdp.curriculums import modify_term_cfg
 from isaaclab.managers import CurriculumTermCfg, ManagerTermBase
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+
+STEPS_PER_IT = 24  # num_steps_per_env of the PPO runner: 1 iteration = 24 env steps
 
 
 class RewardWeightRampCurriculum(ManagerTermBase):
@@ -157,3 +164,48 @@ class CommandRangeCurriculum(ManagerTermBase):
                 self._ranges.lin_vel_x = (lo, min(hi + step, final_max))
             self._sum, self._count, self._last_update = 0.0, 0, env.common_step_counter
         return self._ranges.lin_vel_x[1]
+
+
+class Ramp(modify_term_cfg):
+    """Move any config value along a line between two iterations of this run, and log it.
+
+    ``address`` uses the short form of ``modify_term_cfg``, e.g. ``rewards.action_rate_l2.weight``.
+    ``start`` and ``end`` are numbers or tuples. The value depends only on the step counter, so the many calls
+    per iteration cannot make it run ahead. A tuple logs its upper bound (a TensorBoard graph needs one number).
+    """
+
+    def __call__(self, env, env_ids, address: str, start_it: int, end_it: int, start, end) -> float:
+        it = env.common_step_counter / STEPS_PER_IT
+        t = min(max((it - start_it) / (end_it - start_it), 0.0), 1.0)
+
+        def mix(a, b):
+            return a + t * (b - a)
+
+        value = tuple(map(mix, start, end)) if isinstance(start, tuple) else mix(start, end)
+        super().__call__(env, env_ids, address, lambda *_: value)
+        return value[1] if isinstance(value, tuple) else value
+
+
+def terrain_no_fall(env, env_ids) -> torch.Tensor:
+    """``terrain_levels_vel`` with a stricter rule: a fall moves the robot down and never up."""
+    terrain = env.scene.terrain
+    if env.common_step_counter == 0:  # the very first reset at start-up is not an episode end
+        return terrain.terrain_levels.float().mean()
+    pos = env.scene["robot"].data.root_pos_w.torch[env_ids, :2]
+    walked = torch.linalg.norm(pos - env.scene.env_origins[env_ids, :2], dim=1)
+    fell = env.termination_manager.get_term("base_contact")[env_ids]
+    up = (walked > terrain.cfg.terrain_generator.size[0] / 2) & ~fell
+    terrain.update_env_origins(env_ids, up, fell)
+    return terrain.terrain_levels.float().mean()
+
+
+class SurvivedSuccess(ManagerTermBase):
+    """Reward term that tells ``DifficultyScheduler`` which robots succeeded: they lasted until the time-out."""
+
+    def __init__(self, cfg, env):
+        super().__init__(cfg, env)
+        self.succeeded = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+
+    def __call__(self, env) -> torch.Tensor:
+        self.succeeded[:] = env.termination_manager.time_outs
+        return torch.zeros(env.num_envs, device=env.device)

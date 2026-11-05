@@ -9,7 +9,7 @@ import gymnasium as gym
 
 from . import agents
 
-for _name in ("Base", "Reward", "Push", "Velocity", "Full", "ActionRate"):
+for _name in ("Base", "Reward", "Push", "Velocity", "Full", "ActionRate", "Knobs", "TerrainRule", "Difficulty"):
     gym.register(
         id=f"G1-Curriculum-{_name}",
         entry_point="isaaclab.envs:ManagerBasedRLEnv",
