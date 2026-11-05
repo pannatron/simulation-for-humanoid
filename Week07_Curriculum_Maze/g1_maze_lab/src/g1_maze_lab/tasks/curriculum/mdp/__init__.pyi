@@ -6,10 +6,20 @@
 __all__ = [
     "AdaptivePushCurriculum",
     "CommandRangeCurriculum",
+    "Ramp",
     "RewardWeightRampCurriculum",
+    "SurvivedSuccess",
+    "terrain_no_fall",
 ]
 
 # Forward the velocity-task MDP terms lazily (terrain_levels_vel, rewards, ...), then add ours.
 from isaaclab_tasks.core.velocity.mdp import *  # noqa: F401, F403
 
-from .curriculums import AdaptivePushCurriculum, CommandRangeCurriculum, RewardWeightRampCurriculum
+from .curriculums import (
+    AdaptivePushCurriculum,
+    CommandRangeCurriculum,
+    Ramp,
+    RewardWeightRampCurriculum,
+    SurvivedSuccess,
+    terrain_no_fall,
+)

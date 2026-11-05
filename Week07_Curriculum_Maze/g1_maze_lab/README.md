@@ -4,7 +4,7 @@ Isaac Lab 3 + Newton project. Two parts:
 
 | Part | Tasks | Main files |
 |---|---|---|
-| Lab 7.1 · Curriculum | `G1-Curriculum-{Base,Reward,Push,Velocity,Full,ActionRate}` | `src/g1_maze_lab/tasks/curriculum/mdp/curriculums.py`, `env_cfg.py` |
+| Lab 7.1 · Curriculum | `G1-Curriculum-{Base,Reward,Push,Velocity,Full,ActionRate,Knobs,TerrainRule,Difficulty}` | `src/g1_maze_lab/tasks/curriculum/mdp/curriculums.py`, `env_cfg.py` |
 | Lab 7.2 · Maze challenge | `G1-Maze-{Challenge,Random,Open}`, `G1-Maze-{Challenge,Open}-FlatPolicy` | `src/g1_maze_lab/terrains/maze.py`, `src/g1_maze_lab/autopilot.py`, `scripts/maze_autopilot.py` |
 
 ## Setup (first time)
@@ -23,9 +23,26 @@ uv run isaaclab list_envs | grep G1-
 - `curriculum/<run>/model_5298.pt` — the Lab 7.1 fine-tuning runs from the slides (300 iterations each).
 
 ## Lab 7.1 — train with a curriculum (fine-tune, ~6 min per run on an RTX 3060 Laptop)
+Every curriculum uses the same command. Change `--task` and `agent.run_name` (example: Push):
 ```bash
-uv run isaaclab train --rl_library rsl_rl --task G1-Curriculum-Full --num_envs 1024 \
-    --checkpoint pretrained/g1_rough/model_pretrained.pt agent.max_iterations=300 agent.run_name=full300
+uv run isaaclab train --rl_library rsl_rl --task G1-Curriculum-Push --num_envs 1024 \
+    --checkpoint pretrained/g1_rough/model_pretrained.pt agent.max_iterations=300 agent.run_name=push300
+```
+
+| `--task` | Curriculum added on top of G1 Rough's `terrain_levels` | `agent.run_name` |
+|---|---|---|
+| `G1-Curriculum-Base` | None (the run to compare against) | `base300` |
+| `G1-Curriculum-Reward` | `feet_air_time` weight ramp | `reward300` |
+| `G1-Curriculum-Push` | Push strength that follows the fall rate | `push300` |
+| `G1-Curriculum-Velocity` | Speed command range that follows tracking | `vel300` |
+| `G1-Curriculum-Full` | Reward + Push + Velocity | `full300` |
+| `G1-Curriculum-ActionRate` | Exercise 7.2 answer, `action_rate_l2` weight ramp (use `agent.max_iterations=100`) | `actrate100` |
+| `G1-Curriculum-Knobs` | Six more knobs at once, each with `ramp()` | `knobs` |
+| `G1-Curriculum-TerrainRule` | Replaces `terrain_levels`: a fall moves the robot down, never up | `terrain_rule` |
+| `G1-Curriculum-Difficulty` | One `DifficultyScheduler` number drives two knobs | `difficulty` |
+
+Graphs and measurements:
+```bash
 uv run tensorboard --logdir logs/rsl_rl/g1_curriculum          # graphs Curriculum/*
 uv run python scripts/eval_g1.py --task G1-Curriculum-Base --num_envs 64 \
     --checkpoint logs/rsl_rl/g1_curriculum/<run>/model_5298.pt   # speed / falls / air time
