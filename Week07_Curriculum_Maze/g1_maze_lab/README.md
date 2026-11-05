@@ -23,7 +23,14 @@ uv run isaaclab list_envs | grep G1-
 - `curriculum/<run>/model_5298.pt` — the Lab 7.1 fine-tuning runs from the slides (300 iterations each).
 
 ## Lab 7.1 — train with a curriculum (fine-tune, ~6 min per run on an RTX 3060 Laptop)
-Every curriculum uses the same command. Change `--task` and `agent.run_name` (example: Push):
+Run one curriculum and see its result with one command. It trains, then measures speed, step length and falls,
+and saves the result to `logs/rsl_rl/g1_curriculum/<run>/summary.txt`:
+```bash
+scripts/run_curriculum.sh Push        # or Base, Reward, Velocity, Full, ActionRate, Knobs, TerrainRule, Difficulty
+scripts/run_curriculum.sh Push 100    # a shorter run: 100 iterations instead of 300
+```
+
+To run only the training, every curriculum uses the same command. Change `--task` and `agent.run_name` (example: Push):
 ```bash
 uv run isaaclab train --rl_library rsl_rl --task G1-Curriculum-Push --num_envs 1024 \
     --checkpoint pretrained/g1_rough/model_pretrained.pt agent.max_iterations=300 agent.run_name=push300
