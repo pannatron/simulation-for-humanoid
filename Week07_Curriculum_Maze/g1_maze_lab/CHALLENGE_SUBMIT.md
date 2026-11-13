@@ -16,7 +16,7 @@ top of every page). Nothing has to be installed on your side: a browser is enoug
 
 | | Where it comes from |
 |---|---|
-| **Class code** | Given by the instructor in class (without it the upload is refused) |
+| **Class code** | **`maze8071`** (without it the upload is refused; if it stops working, the instructor has changed it: ask in class) |
 | **Team name** | You choose it: letters, digits, `_` or `-`, 2-32 characters, e.g. `team_tiger` |
 | **Team PIN** | You choose it on your first upload: 4-12 letters or digits. Write it down and share it only with your team |
 | **policy.pt** (required) | Your trained checkpoint: `logs/rsl_rl/<experiment>/<run>/model_XXXX.pt` (any file name is fine) |
@@ -46,7 +46,7 @@ Nothing goes to the leaderboard. The last line is your result: `RESULT ... GOAL 
 2. **Team name**: the same name every time (it is your team on the leaderboard)
 3. **Team PIN**: the first upload of a team name sets its PIN; every later upload of that name needs the same PIN, so
    nobody else can replace your files
-4. **Class code**: from the instructor
+4. **Class code**: `maze8071`
 5. **policy.pt**: choose your `model_XXXX.pt`
 6. **pilot.py** and **helper files**: if you have them
 7. **Submit**: the page says `✓ Uploaded for team <name>: policy.pt, pilot.py ...` and your team appears in the queue
@@ -94,7 +94,7 @@ When you upload:
 
 | Message | What to do |
 |---|---|
-| `wrong class code` | Ask the instructor for the class code |
+| `wrong class code` | Type `maze8071` (no spaces). Still refused: the instructor has changed the code, ask in class |
 | `team name: letters, digits, _ or -, 2-32 characters` | No spaces, no Thai letters, no `.` |
 | `the PIN must be 4-12 letters or digits` | e.g. `tiger2026` |
 | `team X is taken and the PIN does not match` | Wrong PIN, or another team already uses that name. Your team but you forgot the PIN: ask the instructor to reset it (your results stay) |
