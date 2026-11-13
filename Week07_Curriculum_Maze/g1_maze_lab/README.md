@@ -78,6 +78,9 @@ Settings: `MAZE_STRATEGY=left|right|flood`, `MAZE_SENSOR=height|lidar`, `MAZE_SP
 Change the sensor from the command line, e.g. `env.scene.maze_scanner.pattern_cfg.resolution=0.2`.
 
 ## Challenge 7.5 — G1 Hazard Maze (extra)
+**Submitting (students): [CHALLENGE_SUBMIT.md](CHALLENGE_SUBMIT.md)** (upload form, team PIN, class code, statuses,
+messages). **Hosting the server (instructor): [CHALLENGE_SERVER.md](CHALLENGE_SERVER.md)** (sandbox, `/admin`, rounds).
+
 Levels (`--level`, same for `challenge.py`, `challenge_runner.py` and `CHALLENGE_LEVEL` for the server):
 `7` = task `G1-Maze-Hard`, 7 x 7 cells, 300 s; `9` = task `G1-Maze-Hard9`, 9 x 9, 480 s, more hazards (2 trenches,
 a slalom spike cell, spikes on the long route). Start = bottom-left cell, goal = top-right; `--random-ends` picks both
@@ -115,9 +118,10 @@ uv run python scripts/challenge.py --team team_a --seed <seed> --viz newton   # 
 Submit `policy.pt` (required, same network as G1 Rough: checked on upload), `pilot.py` (optional, `class Pilot`, see
 `DefaultPilot` in `scripts/challenge.py`) and up to 5 helper `.py` files the pilot imports (every `.py` must compile, and may not use the real map:
 `GENERATED`, `HAZARDS`, `HARD_CELLS` or `g1_maze_lab.terrains` are refused on upload). A run longer than
-`--timeout` seconds of wall clock (default 3 x 300 + 180) is stopped and shown as an error (a pilot that hangs).
+`--timeout` seconds of wall clock (default 6 x the level's time limit + 300) or whose simulation stops moving for
+`CHALLENGE_STALL` s (default 300, a pilot that hangs) is stopped and shown as an error, with the replay so far.
 A team that is running cannot upload until its run ends.
-The leaderboard shows the round's seed only (`CHALLENGE_SEED`), best run per team; run logs: `submissions/_logs/`, replay videos (the latest run of each team, recorded from the Newton viewer: a run takes about 1.2x its maze time, `--no-replay` runs without a window, about 2x faster): `submissions/_replays/`. A fall, a crash, touching a spike bed or being stuck 10 s sends the robot back to the start; the clock keeps running.
+The leaderboard shows the round's seed only (`CHALLENGE_SEED`, or the round set on `/admin`), best run per team; run logs: `submissions/_logs/`, replay videos (the latest run of each team, recorded from the Newton viewer: a run takes about 1.2x its maze time, `--no-replay` runs without a window, about 2x faster): `submissions/_replays/`. A fall, a crash, touching a spike bed or being stuck 10 s sends the robot back to the start; the clock keeps running.
 
 ## Tests
 `uv run pytest tests` checks the maze generator and the planner without the simulator (a robot that jumps cell to cell).

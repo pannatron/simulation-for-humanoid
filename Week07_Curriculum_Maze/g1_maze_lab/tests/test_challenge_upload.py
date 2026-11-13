@@ -40,12 +40,12 @@ def test_policy_other_network_is_refused(server):
     ],
 )
 def test_pilot_reading_the_map_is_refused(server, src):
-    assert "แผนที่จริง" in server.check_python("pilot.py", src.encode())
+    assert "real map" in server.check_python("pilot.py", src.encode())
 
 
 def test_pilot_checks(server):
     ok = "from g1_maze_lab.autopilot import MazeAutopilot\n\nclass Pilot:\n    pass\n"
     assert server.check_python("pilot.py", ok.encode()) is None
     assert "class Pilot" in server.check_python("pilot.py", b"class Driver:\n    pass\n")
-    assert "บรรทัด 2" in server.check_python("pilot.py", b"class Pilot:\n    def act(self)\n")
+    assert "line 2" in server.check_python("pilot.py", b"class Pilot:\n    def act(self)\n")
     assert server.check_python("helper.py", b"X = 1\n") is None  # helpers need no class Pilot

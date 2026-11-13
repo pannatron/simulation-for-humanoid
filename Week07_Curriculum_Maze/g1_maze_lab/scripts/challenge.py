@@ -30,13 +30,15 @@ Rules (the defaults of this script):
       and no files written in one run and read in the next
 
 Settings (environment variables): CHALLENGE_TIME [s], MAZE_CAM chase | top, MAZE_REC_DIR (frames for a video),
-MAZE_REC_MP4 (the run as an .mp4, used by challenge_runner.py for the replays).
+MAZE_REC_MP4 (the run as an .mp4, used by challenge_runner.py for the replays),
+MAZE_LIVE_DIR (maze.json + state.json + frame.jpg of the run in progress, for the server's /live page).
 """
 
 import argparse
 import contextlib
 import csv
 import importlib.util
+import json
 import math
 import os
 import sys
@@ -72,6 +74,8 @@ REC = bool(REC_DIR or REC_MP4)
 REC_EVERY = int(os.environ.get("MAZE_REC_EVERY", 2))
 SNAP_AT = os.environ.get("MAZE_SNAP_AT", "")  # e.g. "5,30": save viewer frames (with the timer) at these times [s]
 SNAP_DIR = os.environ.get("MAZE_SNAP_DIR", "snapshots")
+LIVE_DIR = os.environ.get("MAZE_LIVE_DIR", "")
+TRACE = os.environ.get("MAZE_TRACE", "")  # the whole run as JSON (pose at 10 Hz + the maze): a 2D replay
 HERE = os.path.dirname(os.path.abspath(__file__))
 SUBMISSIONS = os.environ.get("CHALLENGE_DIR", os.path.join(HERE, "..", "submissions"))
 
@@ -227,12 +231,16 @@ def _find_env(step):
     raise RuntimeError("Could not find the environment in the play loop.")
 
 
+_VIZ = {"viz": None}
+
+
 def _find_viewer():
     from isaaclab.sim import SimulationContext
 
     for viz in getattr(SimulationContext.instance(), "visualizers", []):
         viewer = getattr(viz, "_viewer", None)
         if viewer is not None and hasattr(viewer, "is_key_down"):
+            _VIZ["viz"] = viz
             return viewer
     return None
 
@@ -289,6 +297,70 @@ def _markers(env):
     return m
 
 
+_GRAB = {"host": None}
+
+
+def grab_frame(viewer):
+    """The viewer's last frame as an (H, W, 3) uint8 array. ``viewer.get_frame`` maps the pixels into CUDA with
+    CUDA-OpenGL interop, which only works when OpenGL runs on the NVIDIA driver (with any other OpenGL, e.g. Mesa on a
+    headless server, it returns a black image); there the pixels are read into host memory instead.
+    MAZE_GRAB=host / interop forces one way."""
+    import numpy as np
+
+    if _GRAB["host"] is None:
+        mode = os.environ.get("MAZE_GRAB", "auto")
+        if mode == "auto":
+            from pyglet.gl import gl_info
+
+            _GRAB["host"] = "NVIDIA" not in (gl_info.get_vendor() or "")
+            print(f"[CHALLENGE] OpenGL {gl_info.get_vendor()} / {gl_info.get_renderer()}: frames read "
+                  f"{'into host memory' if _GRAB['host'] else 'with CUDA-OpenGL interop'}", flush=True)
+        else:
+            _GRAB["host"] = mode == "host"
+        if _GRAB["host"]:
+            _read_into_host(viewer)
+    viz = _VIZ["viz"]
+    if viz is not None and getattr(viz, "_runtime_headless", False):
+        # a headless Newton viewer (no display, e.g. a server) renders only when asked for a frame
+        return np.asarray(viz.render_rgb_array())
+    try:
+        return np.asarray(viewer.get_frame(render_ui=False).numpy())
+    except Exception as e:  # noqa: BLE001  (warp raises a plain RuntimeError for the interop failure)
+        print(f"[CHALLENGE] frame capture without CUDA-OpenGL interop ({str(e)[:80]})", flush=True)
+        _GRAB["host"] = True
+        _read_into_host(viewer)
+        return np.asarray(viewer.get_frame(render_ui=False).numpy())
+
+
+def _read_into_host(viewer):
+    """Make ``viewer.get_frame`` read the framebuffer straight into host memory (one glReadPixels, no CUDA)."""
+    import ctypes
+
+    import numpy as np
+
+    renderer = viewer.renderer
+    gl = type(renderer).gl
+
+    class _Frame:
+        def __init__(self, img):
+            self.img = img
+
+        def numpy(self):
+            return self.img
+
+    def get_frame(target_image=None, render_ui=False):
+        w, h = renderer._screen_width, renderer._screen_height
+        buf = (ctypes.c_ubyte * (w * h * 3))()
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, renderer._frame_fbo)
+        gl.glBindBuffer(gl.GL_PIXEL_PACK_BUFFER, 0)
+        gl.glPixelStorei(gl.GL_PACK_ALIGNMENT, 1)
+        gl.glReadPixels(0, 0, w, h, gl.GL_RGB, gl.GL_UNSIGNED_BYTE, buf)
+        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
+        return _Frame(np.frombuffer(buf, dtype=np.uint8).reshape(h, w, 3)[::-1].copy())
+
+    viewer.get_frame = get_frame
+
+
 class _Recorder:
     """1280x720 frames with the timer drawn on them (a video of the run). The viewer frame is read here, drawing and
     saving run on a worker thread so the run does not slow down much."""
@@ -310,23 +382,24 @@ class _Recorder:
 
             import imageio_ffmpeg
 
+            # fragmented MP4 (a keyframe + a fragment every 2 s): a run stopped half way (wall-clock limit, docker
+            # kill) still leaves a playable video; challenge_runner.py remuxes it to a normal MP4 for the browser
             self.ffmpeg = subprocess.Popen(
                 [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
-                 "-s", "1280x720", "-framerate", str(50 // REC_EVERY), "-i", "-", "-c:v", "libx264", "-preset",
-                 "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-movflags", "+faststart", REC_MP4],
+                 "-s", "1280x720", "-framerate", f"{50 / REC_EVERY:g}", "-i", "-", "-c:v", "libx264", "-preset",
+                 "veryfast", "-crf", "27", "-pix_fmt", "yuv420p", "-g", str(max(1, round(100 / REC_EVERY))),
+                 "-movflags", "frag_keyframe+empty_moov+default_base_moof", REC_MP4],
                 stdin=subprocess.PIPE,
             )
         else:
             os.makedirs(REC_DIR, exist_ok=True)
         self.q = queue.Queue(maxsize=64)
+        self.live_t = 0.0
         self.worker = threading.Thread(target=self._work, daemon=True)
         self.worker.start()
 
     def add(self, viewer, index):
-        import numpy as np
-
-        img = np.asarray(viewer.get_frame(render_ui=False).numpy())
-        self.q.put((index, img, dict(HUD)))
+        self.q.put((index, grab_frame(viewer), dict(HUD)))
 
     def _work(self):
         while (item := self.q.get()) is not None:
@@ -336,6 +409,11 @@ class _Recorder:
                 self.ffmpeg.stdin.write(im.tobytes())
             else:
                 im.save(os.path.join(REC_DIR, f"{index:05d}.jpg"), quality=90)
+            if LIVE_DIR and time.time() - self.live_t >= 0.2:  # the /live page's 3D camera: up to 5 frames a second
+                self.live_t = time.time()
+                with contextlib.suppress(OSError):
+                    im.save(os.path.join(LIVE_DIR, ".frame.tmp"), format="JPEG", quality=72)
+                    os.replace(os.path.join(LIVE_DIR, ".frame.tmp"), os.path.join(LIVE_DIR, "frame.jpg"))
 
     def close(self):
         self.q.put(None)
@@ -353,9 +431,9 @@ class _Recorder:
         im = Image.fromarray(img[..., :3]).resize((1280, 720))
         d = ImageDraw.Draw(im, "RGBA")
         big, small = self.big, self.small
-        d.rounded_rectangle((16, 16, 470, 182), 14, fill=(14, 22, 33, 215))
-        d.text((32, 24), f"CHALLENGE 7.5 · {hud['team']} · L{hud['level']} · seed {hud['seed']}", font=small,
-               fill=(122, 201, 67))
+        title = f"CHALLENGE 7.5 · {hud['team']} · L{hud['level']} · seed {hud['seed']}"
+        d.rounded_rectangle((16, 16, max(470, 48 + int(d.textlength(title, font=small))), 182), 14, fill=(14, 22, 33, 215))
+        d.text((32, 24), title, font=small, fill=(122, 201, 67))
         d.text((32, 54), f"{hud['t']:6.1f} s", font=big, fill=(244, 243, 238))
         d.text((32, 108), f"to goal {hud['dist']:4.1f} m   closest {hud['best']:4.1f} m", font=small,
                fill=(244, 243, 238))
@@ -372,6 +450,65 @@ class _Recorder:
             d.rounded_rectangle((500, 16, 900, 84), 14, fill=(61, 122, 18, 230))
             d.text((522, 26), hud["goal"], font=big, fill=(255, 255, 255))
         return im
+
+
+class _Live:
+    """The server's /live page (MAZE_LIVE_DIR: maze.json once per run, state.json about 10 times a second) and the
+    2D replay (MAZE_TRACE: the maze + the pose at 10 Hz, written every 5 s of the run and when it ends, so a run
+    stopped half way still has its replay)."""
+
+    def __init__(self, walls, hazards, start, goal, route_m):
+        self.run = f"{RUN['team'] or 'test'}-L{RUN['level']}-s{RUN['seed']}-{int(time.time())}"
+        n = walls.shape[0]
+        masks = [[int(sum(1 << d for d in range(4) if walls[i, j, d])) for j in range(n)] for i in range(n)]
+        self.maze = {"run": self.run, "team": RUN["team"] or "(test)", "seed": RUN["seed"], "level": RUN["level"],
+                     "n": n, "cell": CELL_SIZE, "start": list(start), "goal": list(goal), "walls": masks,
+                     "limit": TIME_LIMIT, "route_m": route_m}
+        for k in ("gap", "ice", "rough", "ramp", "spike"):
+            self.maze[k] = [list(x) for x in hazards.get(k, [])]
+        if LIVE_DIR:
+            os.makedirs(LIVE_DIR, exist_ok=True)
+            with contextlib.suppress(OSError):
+                os.remove(os.path.join(LIVE_DIR, "frame.jpg"))
+            self._write("maze.json", self.maze)
+        self.trail, self.falls, self.trail_t, self.last_t, self.frames = [], 0, -1.0, -1.0, []
+        self.trace_t = -1e9  # the trace file is written at the first step, then every 5 s and at the end
+
+    def _write(self, name, data, folder=None):
+        folder = folder or LIVE_DIR
+        tmp = os.path.join(folder, f".{os.path.basename(name)}.tmp")
+        with open(tmp, "w") as f:
+            json.dump(data, f, separators=(",", ":"))
+        os.replace(tmp, os.path.join(folder, name))
+
+    def update(self, t, p, yaw, hud, result=None):
+        if hud["falls"] != self.falls:  # back at the start: no line from where it fell
+            self.falls = hud["falls"]
+            self.trail.append(None)
+        if t - self.trail_t >= 0.5:
+            self.trail.append([round(p[0], 2), round(p[1], 2)])
+            self.trail_t = t
+        if result is None and t - self.last_t < 0.1:
+            return
+        self.last_t = t
+        if TRACE:  # t, x, y, yaw, falls, flash, metres to the goal, closest so far
+            self.frames.append([round(hud["t"], 2), round(p[0], 3), round(p[1], 3), round(yaw, 3), hud["falls"],
+                                int(hud["flash"]), round(hud["dist"], 2), round(hud["best"], 2)])
+        if TRACE and (result is not None or t - self.trace_t >= 5.0):
+            self.trace_t = t
+            with contextlib.suppress(OSError):
+                self._write(os.path.basename(TRACE), {"maze": self.maze, "frames": self.frames, "result": result,
+                                                      "goal": float(hud["goal"].split()[1]) if hud["goal"] else None},
+                            folder=os.path.dirname(os.path.abspath(TRACE)))
+        if not LIVE_DIR:
+            return
+        with contextlib.suppress(OSError):
+            self._write("state.json", {
+                "run": self.run, "t": round(hud["t"], 2), "x": round(p[0], 3), "y": round(p[1], 3), "yaw": round(yaw, 3),
+                "falls": hud["falls"], "dist": hud["dist"], "best": hud["best"], "left": hud["left"],
+                "goal": float(hud["goal"].split()[1]) if hud["goal"] else None, "flash": hud["flash"], "why": hud["why"],
+                "trail": self.trail, "done": result is not None, "result": result, "wall": time.time(),
+            })
 
 
 def _snap(viewer, t):
@@ -435,6 +572,8 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
     goal_t = torch.tensor(goal, dtype=torch.long, device=env.device)
     why = "FELL / CRASH"
     dist_m = best_m = route_m  # metres still to walk to the goal: now / the least so far
+    live = _Live(walls, hazards, start, goal, route_m) if LIVE_DIR or TRACE else None
+    p = [start[0] * CELL_SIZE, start[1] * CELL_SIZE]
     last_fall_t = -10.0
     wall_t0 = time.time()
     steps = int(TIME_LIMIT / dt)
@@ -524,6 +663,8 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
             best=best_m,
             route=route_m,
         )
+        if live is not None:
+            live.update(t, p, float(_yaw(robot.data.root_quat_w.torch[0])), HUD)
         if recorder is not None and k % REC_EVERY == 0:
             recorder.add(viewer, k // REC_EVERY)
         if viewer is not None and (k + 1 in snap_steps or (SNAP_AT and finish is not None and 0 <= t - finish - 1.5 < dt)):
@@ -541,13 +682,15 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
             )
 
     result = "GOAL" if finish is not None else "DNF"
+    summary = (result + (f" {finish:.1f} s" if finish is not None else f" (closest {best_m:.1f} m to the goal, "
+                         f"{best_left} cells; shortest route {route_m:.0f} m)") + f", falls {falls}")
     print(
-        f"[CHALLENGE] RESULT team={RUN['team'] or '(test)'} seed={RUN['seed']}: {result}"
-        + (f" {finish:.1f} s" if finish is not None else f" (closest {best_m:.1f} m to the goal, "
-           f"{best_left} cells; shortest route {route_m:.0f} m)")
-        + f", falls {falls}  (wall clock {time.time() - wall_t0:.0f} s)",
+        f"[CHALLENGE] RESULT team={RUN['team'] or '(test)'} seed={RUN['seed']}: {summary}"
+        f"  (wall clock {time.time() - wall_t0:.0f} s)",
         flush=True,
     )
+    if live is not None:
+        live.update(HUD["t"], p, float(_yaw(robot.data.root_quat_w.torch[0])), HUD, result=summary)
     if RUN["score"]:
         path = os.path.join(SUBMISSIONS, "leaderboard.csv")
         new = not os.path.exists(path)
@@ -571,7 +714,25 @@ def challenge_playback(step, *, dt, args_cli, env_cfg):
 
 play_rsl_rl.run_playback = challenge_playback
 
+
+def cuda_graphs_ok():
+    """CHALLENGE_CUDA_GRAPH=1 / 0 forces Newton's CUDA graph on / off. Default: off when the NVIDIA driver is older
+    than Warp's CUDA toolkit, because such a driver cannot load a GPU module while a graph is being captured
+    ("Warp CUDA error 900 ... stream is capturing", e.g. driver 535 = CUDA 12.2). Off = slower, same physics."""
+    forced = os.environ.get("CHALLENGE_CUDA_GRAPH", "")
+    if forced in ("0", "1"):
+        return forced == "1"
+    wp.init()
+    driver, toolkit = wp.get_cuda_driver_version(), wp.get_cuda_toolkit_version()
+    return not driver or not toolkit or tuple(driver) >= tuple(toolkit)
+
+
 if __name__ == "__main__":
+    if not cuda_graphs_ok():
+        from isaaclab_newton.physics.newton_manager import NewtonManager
+
+        NewtonManager._supports_cuda_graph_capture = classmethod(lambda cls: False)
+        print("[CHALLENGE] CUDA graphs off (NVIDIA driver older than the CUDA toolkit): eager physics", flush=True)
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--team", default="")
     parser.add_argument("--seed", type=int, default=int(os.environ.get("CHALLENGE_SEED", 2026)))
