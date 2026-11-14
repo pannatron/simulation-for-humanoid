@@ -146,6 +146,11 @@ graphs stay on and runs should be several times faster (not measured on this set
 A run is stopped (`error`) after `--timeout` or when it stalls for `CHALLENGE_STALL` s; it still gets a replay of
 what it did ("Stopped at ... s · no result", shown before last place).
 
+The queue is the bottleneck, not the uploads (a checkpoint is ~8 MB, checked in milliseconds): a round of N teams
+takes up to N x 40 min / `CHALLENGE_PARALLEL` when nobody reaches the goal (15 teams, 3 at once: ~3 h 20 min), and in
+practice every re-upload queues one more run. Start the real round early, raise `CHALLENGE_PARALLEL` if the machine
+has spare cores, or record no 3D video (`--no-replay`, ~1.5 x faster, the 2D replay stays).
+
 ## 5. When something goes wrong
 
 | Symptom | |

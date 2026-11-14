@@ -24,6 +24,7 @@ The round (level, seed, uploads open) set on /admin is kept in submissions/round
 CHALLENGE_LEVEL / CHALLENGE_SEED. /live shows the run in progress on a map (written by challenge.py, MAZE_LIVE_DIR).
 """
 
+import ast
 import contextlib
 import csv
 import fcntl
@@ -31,6 +32,7 @@ import glob
 import hashlib
 import hmac
 import html
+import importlib.util
 import json
 import os
 import re
@@ -118,6 +120,59 @@ def check_python(name, data: bytes):
         return (f"{name} line {line}: {m.group(0).decode(errors='ignore')} is not allowed "
                 "(that is the real map of the maze: a pilot may only use what the robot senses, obs)")
     return None
+
+
+def _module_available(name, local):
+    """Importable in a run: the standard library, the course's .venv (the sandbox mounts the same one), scripts/
+    (on sys.path here and in challenge.py), or one of the team's own files."""
+    if name in local or name in sys.stdlib_module_names:
+        return True
+    try:
+        return importlib.util.find_spec(name) is not None  # finds a top-level module without importing it
+    except (ImportError, ValueError):
+        return False
+
+
+def code_warnings(files):
+    """Problems the upload checks let through but a run would only show after its wait in the queue: an import the
+    server does not have, a Pilot without act() / reset(), an __init__ that cannot take the four arguments.
+    ``files``: {file name: bytes}. Imports inside ``try:`` are optional on purpose and not reported."""
+    local = {os.path.splitext(n)[0] for n in files}
+    out = []
+    for name, data in files.items():
+        try:
+            tree = ast.parse(data.decode("utf-8"))
+        except Exception:  # noqa: BLE001 (syntax errors are reported by check_python)
+            continue
+        optional = {id(n) for t in ast.walk(tree) if isinstance(t, ast.Try) for b in t.body for n in ast.walk(b)}
+        seen = set()
+        for node in ast.walk(tree):
+            if id(node) in optional:
+                continue
+            if isinstance(node, ast.Import):
+                mods = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                mods = [node.module]
+            else:
+                continue
+            for top in {m.split(".")[0] for m in mods} - seen:
+                seen.add(top)
+                if not _module_available(top, local):
+                    out.append(f"{name} line {node.lineno}: import {top} - the server does not have it (the standard "
+                               "library, numpy, scipy, torch, networkx, shapely, PIL and your own helper files are "
+                               "there): the run would stop at that line")
+        cls = next((n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Pilot"), None)
+        if name != "pilot.py" or cls is None or cls.bases:  # a subclass may inherit the methods
+            continue
+        methods = {n.name: n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        for meth, when in (("act", "at its first step"), ("reset", "at the robot's first fall")):
+            if meth not in methods:
+                out.append(f"pilot.py: class Pilot has no {meth}(): the run would stop {when}")
+        init = methods.get("__init__")
+        if init and not init.args.vararg and len(init.args.args) - 1 < 4:
+            out.append("pilot.py: Pilot.__init__ must take (num_envs, num_cells, cell_size, device, start_cell, "
+                       "goal_cell) (see DefaultPilot): the run would stop at the start")
+    return out
 
 
 # ----------------------------------------------------------------------------- data
@@ -276,7 +331,7 @@ background:var(--bg);color:var(--text);font-size:1rem}}
 button{{margin-top:18px;padding:12px 28px;border:0;border-radius:12px;background:var(--green);color:#0E1621;
 font-weight:700;font-size:1.05rem;cursor:pointer;font-family:Prompt,sans-serif}} button:hover{{filter:brightness(1.08)}}
 .msg{{padding:14px 18px;border-radius:14px;background:#203a2a;border:1px solid #2f5c3d;margin:14px 0}}
-.msg.err{{background:#3a1f1f;border-color:#6b2f2f}} .grid2{{display:grid;grid-template-columns:1.1fr 1fr;gap:18px}}
+.msg.err{{background:#3a1f1f;border-color:#6b2f2f}} .msg .wr{{display:inline-block;margin-top:8px;color:var(--orange);font-weight:600}} .grid2{{display:grid;grid-template-columns:1.1fr 1fr;gap:18px}}
 @media(max-width:820px){{.grid2,.podium{{grid-template-columns:1fr}} .p1{{order:-1}}}}
 .big .p .name{{font-size:2rem}} .big .p .score{{font-size:2.4rem}} .big table{{font-size:1.35rem}} .big h1{{font-size:3rem}}
 small.u,.u{{color:var(--dim)}}
@@ -569,6 +624,23 @@ bar(); load(cur);
 </script></div></body></html>""")
 
 
+UPLOAD_JS = """<script>
+(() => { const f = document.getElementById('up'); if (!f || !window.FormData) return;
+ f.addEventListener('submit', e => { e.preventDefault();
+  const b = f.querySelector('button[type=submit]'), p = document.getElementById('prog'), x = new XMLHttpRequest();
+  b.disabled = true; b.textContent = 'Uploading...'; p.style.display = 'block'; p.textContent = 'Uploading...';
+  x.open('POST', '/upload');
+  x.upload.onprogress = ev => { if (ev.lengthComputable) p.textContent = 'Uploading ' + Math.round(ev.loaded / ev.total * 100)
+    + ' % (' + (ev.loaded / 1e6).toFixed(1) + ' of ' + (ev.total / 1e6).toFixed(1) + ' MB): keep this page open'; };
+  x.upload.onload = () => { p.textContent = 'Checking the files on the server...'; };
+  x.onload = () => { document.open(); document.write(x.responseText); document.close(); window.scrollTo(0, 0); };
+  x.onerror = x.ontimeout = () => { b.disabled = false; b.textContent = 'Submit';
+    p.textContent = 'The upload did not reach the server (network?): try again'; };
+  x.send(new FormData(f)); });
+})();
+</script>"""
+
+
 def student_page(msg=""):
     data = board_data()
     closed = ('' if data["open"] else
@@ -584,7 +656,7 @@ def student_page(msg=""):
             + '<div class="top"><div><div class="eyebrow">Challenge 7.5 · G1 Hazard Maze</div><h1>Submit to the leaderboard</h1></div>'
             + chips(data) + "</div>" + msg + closed
             + '<div class="grid2"><div class="card"><h3>Upload</h3>'
-            + '<form method="post" action="/upload" enctype="multipart/form-data">'
+            + '<form method="post" action="/upload" enctype="multipart/form-data" id="up">'
             + f'<label>Team name</label><input type="text" name="team" required pattern="{TEAM_RE}" placeholder="e.g. team_tiger">'
             + '<div class="hint">Letters, digits, _ or -, 2-32 characters. Uploading again with the same name replaces your files</div>'
             + pin + code
@@ -594,7 +666,8 @@ def student_page(msg=""):
             + '<div class="hint">Must define class Pilot; without one the default autopilot drives</div>'
             + '<label>Helper .py files your pilot imports (optional)</label><span class="file"><input type="file" name="helpers" accept=".py" multiple></span>'
             + '<div class="hint">Up to 5 files. A pilot may not keep data from one run for the next</div>'
-            + '<button type="submit">Submit</button></form></div>'
+            + '<button type="submit">Submit</button><div class="hint" id="prog" style="display:none"></div></form>'
+            + UPLOAD_JS + '</div>'
             + '<div class="card"><h3>Rules in short</h3><ul style="line-height:1.8;color:var(--soft)">'
             + "<li>Fastest to the goal wins; without a goal, the team that got closest wins</li><li>A fall, a wall crash or 10 s stuck sends the robot back to the start; the clock keeps running</li>"
             + "<li>A pilot may only use what the robot senses during the run, never the map</li><li>Touching a red spike bed counts as a fall: back to the start</li><li>Every team runs the same maze; the instructor announces the level and the seed</li>"
@@ -1108,6 +1181,11 @@ class Handler(BaseHTTPRequestHandler):
         if load_status().get(team, {}).get("state") == "running":
             return self._error(f"team {team} is running right now: upload again when this run has finished")
         folder = os.path.join(SUBMISSIONS, team)
+        warns = code_warnings({**({"pilot.py": pilot} if pilot else {}),
+                               **{os.path.basename(f): d for f, d in helpers}})
+        if not pilot and os.path.exists(os.path.join(folder, "pilot.py")):
+            warns.append("no pilot.py in this upload: it replaces your earlier files, so the default autopilot drives "
+                         "this run (upload pilot.py again to keep yours)")
         os.makedirs(folder, exist_ok=True)
         for old in os.listdir(folder):  # a new upload replaces everything (also exported/ and __pycache__/ of old runs)
             path = os.path.join(folder, old)
@@ -1130,8 +1208,10 @@ class Handler(BaseHTTPRequestHandler):
                 _write_json("_teams.json", pins)
         names = ", ".join(n for n, _ in saved)
         print(f"[UPLOAD] {team}: {names} ({len(policy) / 1e6:.1f} MB)", flush=True)
+        warn_html = "".join(f'<br><span class="wr">⚠ {html.escape(w)}</span>' for w in warns)
         return self._send(student_page(f'<div class="msg">✓ Uploaded for team <b>{html.escape(team)}</b>: {html.escape(names)} '
-                                       f'<br><small class="u">It runs automatically in queue order; the result appears in the table below</small></div>'))
+                                       f'<br><small class="u">It runs automatically in queue order; the result appears in the table below</small>'
+                                       f'{warn_html}</div>'))
 
     def log_message(self, fmt, *args):
         pass

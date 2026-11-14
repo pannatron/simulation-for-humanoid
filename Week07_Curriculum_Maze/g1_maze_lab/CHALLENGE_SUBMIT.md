@@ -53,7 +53,17 @@ Nothing goes to the leaderboard. The last line is your result: `RESULT ... GOAL 
 
 Every file is checked when you upload (the policy's network, every `.py` compiles, `pilot.py` defines `class
 Pilot`, no reading of the map). If something is wrong, the page says what (table below) and nothing is saved:
-fix it and submit again.
+fix it and submit again. A slow connection is fine: the page shows the upload progress (a checkpoint is ~8 MB).
+
+The upload is accepted but marked **⚠** when it would most likely fail only later, after the wait in the queue:
+read those lines, fix and upload again.
+
+| ⚠ warning | Why |
+|---|---|
+| `import X - the server does not have it` | Runs have no internet and no `pip install`: only the Python standard library, the course's packages (`torch`, `numpy`, `scipy`, `networkx`, `shapely`, `PIL`, `matplotlib`, `g1_maze_lab`, ...) and your own helper files. Not there: `cv2`, `sklearn`, `pandas`, `skimage`. An import inside `try:` counts as optional and is not reported |
+| `class Pilot has no act()` / `no reset()` | `act()` is called every step, `reset()` after every fall |
+| `Pilot.__init__ must take (num_envs, num_cells, cell_size, device, start_cell, goal_cell)` | Same arguments as `DefaultPilot` |
+| `no pilot.py in this upload` | A new upload replaces all your files: without `pilot.py` the default autopilot drives |
 
 ### Or from the terminal
 

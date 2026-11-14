@@ -49,3 +49,19 @@ def test_pilot_checks(server):
     assert "class Pilot" in server.check_python("pilot.py", b"class Driver:\n    pass\n")
     assert "line 2" in server.check_python("pilot.py", b"class Pilot:\n    def act(self)\n")
     assert server.check_python("helper.py", b"X = 1\n") is None  # helpers need no class Pilot
+
+
+def test_code_warnings(server):
+    ok = (b"import math\nimport numpy as np\nfrom tuning import SPEED\nfrom g1_maze_lab.autopilot import MazeAutopilot\n"
+          b"try:\n    import cv2\nexcept ImportError:\n    cv2 = None\n\n"
+          b"class Pilot:\n    def __init__(self, num_envs, num_cells, cell_size, device, start_cell, goal_cell):\n        pass\n"
+          b"    def act(self, obs):\n        return None\n    def reset(self, env_ids):\n        pass\n")
+    assert server.code_warnings({"pilot.py": ok, "tuning.py": b"SPEED = 1\n"}) == []
+    w = server.code_warnings({"pilot.py": ok})  # tuning.py not uploaded this time
+    assert len(w) == 1 and "import tuning" in w[0] and "line 3" in w[0]
+    bad = b"import cv2\n\nclass Pilot:\n    def __init__(self, n):\n        pass\n"
+    w = " | ".join(server.code_warnings({"pilot.py": bad}))
+    assert "import cv2" in w and "no act()" in w and "no reset()" in w and "__init__" in w
+    sub = b"from maze_autopilot import MazeAutopilot\n\nclass Pilot(MazeAutopilot):\n    pass\n"
+    assert server.code_warnings({"pilot.py": sub}) == []  # inherited methods are not checked
+    assert server.code_warnings({"pilot.py": b"class Pilot(\n"}) == []  # syntax errors: check_python reports them
