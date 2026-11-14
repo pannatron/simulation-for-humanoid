@@ -58,6 +58,15 @@ CHALLENGE_DIR=/srv/maze/submissions CHALLENGE_SANDBOX=docker CHALLENGE_WARP_CACH
   uv run python scripts/challenge_runner.py --warm-cache --level final --seed 1
 ```
 
+Docker cleanups that remove unused images (`docker image prune -a`, the nightly cleanup of Coolify / Portainer ...)
+delete `maze-sandbox:1` between runs. Keep it in use with a tiny container (the runner also rebuilds the image when it
+is missing, ~2 min, before the next run):
+
+```bash
+docker run -d --name maze-sandbox-keep --restart unless-stopped --network none --read-only --cap-drop ALL \
+  --user 65534:65534 --memory 32m maze-sandbox:1 sleep infinity
+```
+
 Refill the kernel cache (`rm -rf /srv/maze/warp-cache/*` + the command above) after updating Isaac Lab, Newton or the
 GPU driver. 3D replays need OpenGL in the container: Mesa on a non-NVIDIA render node (the CPU's integrated GPU,
 `/dev/dri/renderD*`). Without one, runs still work and `/replay` plays the 2D map replay instead.
@@ -143,6 +152,7 @@ what it did ("Stopped at ... s · no result", shown before last place).
 |---|---|
 | `Conditional graph nodes require CUDA driver 12.4+` in a log | Harmless with an old driver: Isaac Lab falls back to normal execution |
 | `this run was stopped by the system` | The container was killed (runner stopped, out of memory, `docker kill`): **Re-run** |
+| `pull access denied for maze-sandbox` / `the server's sandbox is broken` | The image was removed (Docker cleanup) and could not be rebuilt: `docker build -t maze-sandbox:1 scripts/sandbox`, start the keeper container above, **Re-run** |
 | Every run fails at start with a CUDA error | Driver libraries changed (driver update without reboot?): reboot, then refill the kernel cache |
 | No 3D video, only the 2D replay | No usable Mesa render node for the container: see the run log (`OpenGL ...` line) |
 | A team is stuck in `running` after a crash of the runner | Start the runner again: it stops leftover containers of this `CHALLENGE_DIR` and re-queues the team |

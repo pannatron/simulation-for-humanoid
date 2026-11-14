@@ -55,6 +55,35 @@ Every file is checked when you upload (the policy's network, every `.py` compile
 Pilot`, no reading of the map). If something is wrong, the page says what (table below) and nothing is saved:
 fix it and submit again.
 
+### Or from the terminal
+
+`scripts/submit.py` does the same as the form. It needs only `python3` (no Isaac Lab, no uv), so it also runs on a
+machine that only has the files; on its own it is one file you can copy.
+
+```bash
+python scripts/submit.py --team team_tiger --pin tiger2026 --code maze8071 \
+    --policy logs/rsl_rl/<experiment>/<run>/model_XXXX.pt --pilot pilot.py --helper tuning.py --wait
+```
+
+```
+Uploading model_6499.pt, pilot.py, tuning.py (7.8 MB) as team team_tiger to https://maze.mcp-digitalstudio.com ...
+✓ Uploaded for team team_tiger: policy.pt, pilot.py, tuning.py
+It runs automatically in queue order; the result appears in the table below
+team_tiger: queue #2 (uploaded 10:21:46)
+10:31:02 team_tiger: running since 10:31:00 · watch https://maze.mcp-digitalstudio.com/live?team=team_tiger
+...
+```
+
+- `--pilot` and `--helper` (repeat it, up to 5) are optional, like on the form. The same rules apply: a new upload
+  replaces **all** your files, so send them every time.
+- Leave out `--pin` and the script asks for it without showing it. `MAZE_TEAM`, `MAZE_PIN`, `MAZE_CODE` and
+  `MAZE_URL` in the environment replace the options:
+  `export MAZE_TEAM=team_tiger MAZE_CODE=maze8071`, then `python scripts/submit.py --policy model_XXXX.pt --pilot pilot.py`.
+- `--wait` prints every change (queue → running → done / error) until the run ends; Ctrl+C stops waiting, not the run.
+- `python scripts/submit.py --status --team team_tiger` shows where your team is; `--status` alone shows the
+  ranking and the queue of the round.
+- Exit code 0 = accepted, 1 = refused (the same `✗` message as the web page, table below).
+
 ## 4. After the upload
 
 | Status | Meaning |

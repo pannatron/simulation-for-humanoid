@@ -141,6 +141,8 @@ def main():
     if args.warm_cache:
         return warm_cache(args)
     stop_leftover_containers()
+    if SANDBOX == "docker":
+        ensure_image()
     with status_lock():  # a runner stopped with Ctrl+C mid-run left a team "running": queue it again
         st = load()
         for s in st.values():
@@ -259,6 +261,13 @@ def run_team(team, args):
     work = None
     try:
         if SANDBOX == "docker":
+            try:  # a docker cleanup (e.g. a nightly `docker image prune -a`) may have removed it
+                ensure_image()
+            except RuntimeError as e:
+                print(f"[RUNNER] {team}: ERROR {e}", flush=True)
+                set_state(team, state="error", seed=args.seed, level=args.level,
+                          msg="the server's sandbox is broken, not the team's code: the instructor can re-run it")
+                return
             work = new_workdir(name)
             shutil.copytree(os.path.join(SUBMISSIONS, team), os.path.join(work, "sub", team),
                             ignore=shutil.ignore_patterns("exported", "__pycache__"))
@@ -419,6 +428,30 @@ def new_workdir(name):
     return work
 
 
+IMAGE_LOCK = threading.Lock()
+
+
+def sandbox_image():
+    return os.environ.get("CHALLENGE_SANDBOX_IMAGE", "maze-sandbox:1")
+
+
+def ensure_image():
+    """Build the sandbox image (scripts/sandbox/Dockerfile, ~2 min) if it is not there. Docker cleanups that remove
+    unused images (`docker image prune -a`, Coolify's nightly cleanup, ...) delete it between rounds; keep it with a
+    container that uses it: docker run -d --name maze-sandbox-keep --restart unless-stopped --network none
+    maze-sandbox:1 sleep infinity."""
+    image = sandbox_image()
+    with IMAGE_LOCK:  # several workers: build once
+        if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode == 0:
+            return
+        print(f"[RUNNER] sandbox image {image} is missing: building it from scripts/sandbox ...", flush=True)
+        r = subprocess.run(["docker", "build", "-q", "-t", image, os.path.join(HERE, "sandbox")],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(f"cannot build the sandbox image {image}: {r.stderr.strip()[-300:]}")
+        print(f"[RUNNER] sandbox image {image} built", flush=True)
+
+
 def container_name(name):
     return "maze-run-" + re.sub(r"[^A-Za-z0-9_.-]", "-", name)[:60] + f"-{os.getpid()}"
 
@@ -476,7 +509,7 @@ def sandbox_cmd(cname, work, env, script_args, warp=None, live=None):
     full_env.update(env)
     for k, v in full_env.items():
         cmd += ["-e", f"{k}={v}"]
-    cmd += ["-w", "/work", os.environ.get("CHALLENGE_SANDBOX_IMAGE", "maze-sandbox:1"),
+    cmd += ["-w", "/work", sandbox_image(),
             os.path.join(PROJECT, ".venv", "bin", "python"), os.path.join(PROJECT, "scripts", "challenge.py")]
     return cmd + script_args
 

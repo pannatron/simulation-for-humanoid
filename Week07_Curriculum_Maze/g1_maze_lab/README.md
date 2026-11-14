@@ -78,8 +78,8 @@ Settings: `MAZE_STRATEGY=left|right|flood`, `MAZE_SENSOR=height|lidar`, `MAZE_SP
 Change the sensor from the command line, e.g. `env.scene.maze_scanner.pattern_cfg.resolution=0.2`.
 
 ## Challenge 7.5 — G1 Hazard Maze (extra)
-**Submitting (students): [CHALLENGE_SUBMIT.md](CHALLENGE_SUBMIT.md)** (upload form, team PIN, class code, statuses,
-messages). **Hosting the server (instructor): [CHALLENGE_SERVER.md](CHALLENGE_SERVER.md)** (sandbox, `/admin`, rounds).
+**Submitting (students): [CHALLENGE_SUBMIT.md](CHALLENGE_SUBMIT.md)** (upload form or `scripts/submit.py` from the
+terminal, team PIN, class code, statuses, messages). **Hosting the server (instructor): [CHALLENGE_SERVER.md](CHALLENGE_SERVER.md)** (sandbox, `/admin`, rounds).
 
 Levels (`--level`, same for `challenge.py`, `challenge_runner.py` and `CHALLENGE_LEVEL` for the server):
 `7` = task `G1-Maze-Hard`, 7 x 7 cells, 300 s; `9` = task `G1-Maze-Hard9`, 9 x 9, 480 s, more hazards (2 trenches,
