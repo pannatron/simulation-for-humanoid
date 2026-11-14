@@ -7,8 +7,8 @@ A submission is a folder ``submissions/<team>/`` (upload it with ``scripts/chall
 Levels (--level, or CHALLENGE_LEVEL; see challenge_levels.py):
     7      7 x 7, start bottom-left, goal top-right, 300 s        (practice)
     9      9 x 9, same corners, more hazards, a slalom, 480 s     (practice)
-    final  10 x 10, start and goal cells random from the seed, 600 s (the real run)
-    --random-ends on 7 / 9: random start and goal there too (practise for the final)
+    final  10 x 10, same corners, spike beds on both routes, 600 s (the real run)
+    --random-ends on 7 / 9: random start and goal (extra practice)
 
 Usage (from the project folder):
     # watch it: Newton viewer window with the timer (the instructor's screen)

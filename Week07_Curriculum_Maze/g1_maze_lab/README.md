@@ -83,8 +83,8 @@ terminal, team PIN, class code, statuses, messages). **Hosting the server (instr
 
 Levels (`--level`, same for `challenge.py`, `challenge_runner.py` and `CHALLENGE_LEVEL` for the server):
 `7` = task `G1-Maze-Hard`, 7 x 7 cells, 300 s; `9` = task `G1-Maze-Hard9`, 9 x 9, 480 s, more hazards (2 trenches,
-a slalom spike cell, spikes on the long route). Start = bottom-left cell, goal = top-right; `--random-ends` picks both
-from the seed (the final level does that, on a bigger 10 x 10 maze; it comes with the challenge day).
+a slalom spike cell, spikes on the long route). Start = bottom-left cell, goal = top-right on every level, the final
+too (a bigger 10 x 10 maze that comes with the challenge day); `--random-ends` picks both from the seed on 7 / 9.
 Two ways out of the start: a SHORT route with hard hazards (trenches 0.15-0.22 m, steep ramps 0.24-0.30 m, spike beds,
 ice, rough floor all the way) and a LONG, twisty route with easier ones (low ramps 0.10-0.18 m, loose boxes, ice, and
 spike beds too). The first hard hazard of the short route is 1-2 cells after the fork, so walking in a little shows it.

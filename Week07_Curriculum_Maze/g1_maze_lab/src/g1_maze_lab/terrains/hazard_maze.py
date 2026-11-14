@@ -95,6 +95,12 @@ def _pick_ends(n: int, rng, min_dist: int):
             return s, g
 
 
+def _spread(cells) -> float:
+    """Smallest Manhattan distance between two of ``cells`` (inf for fewer than two)."""
+    return min((abs(a[0] - b[0]) + abs(a[1] - b[1]) for k, a in enumerate(cells) for b in cells[k + 1:]),
+               default=float("inf"))
+
+
 def _straight_cells(walls: np.ndarray) -> list[tuple[int, int, int]]:
     """Cells that are a straight corridor: open on two opposite sides, closed on the other two.
     Returns (i, j, axis) with axis 0 = corridor along x, 1 = along y."""
@@ -210,16 +216,21 @@ def hazard_maze_terrain(difficulty: float, cfg: HazardMazeTerrainCfg) -> tuple[l
     straight = {s[:2]: s for s in _straight_cells(walls) if s[:2] not in banned}
     placed = []
 
-    def pick(cells, k):
+    def pick(cells, k, far=None):
+        """``k`` random straight cells of ``cells``, not next to a placed hazard (and with ``far``: at least
+        ``spike_min_cells`` from each of those cells, which grows with the picks)."""
         cand = [straight[x] for x in cells if x in straight]
         out = []
         for idx in rng.permutation(len(cand)):
             if len(out) == k:
                 break
             i, j, _ = cand[idx]
-            if all(abs(i - a) + abs(j - b) > 1 for a, b, _ in placed):
+            if all(abs(i - a) + abs(j - b) > 1 for a, b, _ in placed) and (
+                    far is None or all(abs(i - a) + abs(j - b) >= cfg.spike_min_cells for a, b, *_ in far)):
                 out.append(cand[idx])
                 placed.append(cand[idx])
+                if far is not None:
+                    far.append(cand[idx])
         return out
 
     def free(cells, k):
@@ -238,19 +249,35 @@ def hazard_maze_terrain(difficulty: float, cfg: HazardMazeTerrainCfg) -> tuple[l
         kinds = (["gap"] * cfg.short_gaps + ["ramp"] * cfg.short_ramps + ["spike"] * cfg.short_spikes
                  + ["slalom"] * cfg.short_slaloms)
         # the first slot (near the fork, see _routes_ok) always gets a hazard the scanner sees well: ramp or spikes
-        chosen = [0] + sorted(1 + rng.permutation(len(slots) - 1)[: len(kinds) - 1])
-        kinds = [kinds[i] for i in rng.permutation(len(kinds))]
-        first = next(i for i, k in enumerate(kinds) if k in ("ramp", "spike"))
-        kinds.insert(0, kinds.pop(first))
-        kinds = kinds[: len(chosen)]
+        def assign(kinds0):
+            chosen = [0] + sorted(1 + rng.permutation(len(slots) - 1)[: len(kinds0) - 1])
+            kinds = [kinds0[i] for i in rng.permutation(len(kinds0))]
+            first = next(i for i, k in enumerate(kinds) if k in ("ramp", "spike"))
+            kinds.insert(0, kinds.pop(first))
+            return chosen, kinds[: len(chosen)]
+
+        def spike_spread(chosen, kinds):
+            return _spread([slots[i] for i, k in zip(chosen, kinds) if k in ("spike", "slalom")])
+
+        kinds0 = kinds
+        chosen, kinds = assign(kinds0)
+        if cfg.spike_min_cells > 2:  # spike beds further apart: draw again (the best draw if none fits)
+            best = (spike_spread(chosen, kinds), chosen, kinds)
+            for _ in range(500):
+                if best[0] >= cfg.spike_min_cells:
+                    break
+                chosen, kinds = assign(kinds0)
+                best = max(best, (spike_spread(chosen, kinds), chosen, kinds), key=lambda b: b[0])
+            _, chosen, kinds = best
         hard = {k: [straight[slots[i]] for i, kk in zip(chosen, kinds) if kk == k]
                 for k in ("gap", "ramp", "spike", "slalom")}
         placed += hard["gap"] + hard["ramp"] + hard["spike"] + hard["slalom"]
         gaps, ramps_s = hard["gap"], hard["ramp"]
         spikes = [(x, "lane") for x in hard["spike"]] + [(x, "slalom") for x in hard["slalom"]]
         ramps_l = pick(long_only, cfg.long_ramps)
-        spikes += [(x, "lane") for x in pick(long_only, cfg.long_spikes)]
-        spikes += [(x, "slalom") for x in pick(long_only, cfg.long_slaloms)]
+        far = [x for x, _ in spikes] if cfg.spike_min_cells > 2 else None
+        spikes += [(x, "lane") for x in pick(long_only, cfg.long_spikes, far)]
+        spikes += [(x, "slalom") for x in pick(long_only, cfg.long_slaloms, far)]
         ice += free(short_only, cfg.short_ice)
         ice += free(long_only, cfg.long_ice)
         rough += free(long_only, cfg.long_rough)
@@ -537,6 +564,9 @@ class HazardMazeTerrainCfg(MazeTerrainCfg):
     """Length of each slope along the corridor [m] (0.3 m over 0.75 m = 22 deg, the steepest slope G1 Rough trained on)."""
 
     num_spikes: int = 3
+    spike_min_cells: int = 2
+    """Spike-bed cells (lane or slalom) at least this many cells apart (Manhattan, so at least as far along any
+    route). 2 = only never in neighbouring cells, like every other hazard."""
     spike_reach_range: tuple[float, float] = (-0.1, 0.0)
     """How far the bed reaches past the middle of the corridor [m] (negative = stops short of it); the free lane is
     0.93-1.03 m wide. The beds are deadly in the challenge, so the lane must fit a walking G1 (feet ~0.25 m apart)."""

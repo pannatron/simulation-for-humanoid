@@ -28,13 +28,13 @@ from G1 Rough (same network: the upload checks it). Not the exported `exported/p
 
 ## 2. Test on your machine first
 
-The final 10 x 10 maze is only on the server, but levels 7 and 9 have the same hazards. Random start / goal like the
-final:
+The final 10 x 10 maze is only on the server, but levels 7 and 9 have the same hazards and the same corners (start
+bottom-left, goal top-right):
 
 ```bash
 cd Week07_Curriculum_Maze/g1_maze_lab
 uv run python scripts/challenge.py --policy logs/rsl_rl/<experiment>/<run>/model_XXXX.pt --pilot pilot.py \
-    --level 9 --random-ends --seed 1 --viz newton
+    --level 9 --seed 1 --viz newton
 ```
 
 Nothing goes to the leaderboard. The last line is your result: `RESULT ... GOAL 123.4 s, falls 1` or

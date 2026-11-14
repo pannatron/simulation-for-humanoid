@@ -2,9 +2,9 @@
 
     7      7 x 7, start bottom-left, goal top-right          practice
     9      9 x 9, same corners, more hazards (slalom spikes)  practice
-    final  10 x 10, start and goal random from the seed      the real run (instructor only until the day)
+    final  10 x 10, same corners, spike beds on both routes   the real run (instructor only until the day)
 
-Spike beds are deadly on every level. Practise random start / goal on 7 or 9 with ``--random-ends``.
+Spike beds are deadly on every level. ``--random-ends`` picks start and goal from the seed on 7 or 9 (extra practice).
 """
 
 import os
@@ -15,7 +15,7 @@ LEVELS = {
 }
 _FINAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "g1_maze_lab", "tasks", "challenge_final")
 if os.path.isdir(_FINAL):
-    LEVELS["final"] = {"task": "G1-Maze-Final", "cells": 10, "time": 600, "random_ends": True}
+    LEVELS["final"] = {"task": "G1-Maze-Final", "cells": 10, "time": 600, "random_ends": False}
 DEFAULT_LEVEL = "7"
 
 

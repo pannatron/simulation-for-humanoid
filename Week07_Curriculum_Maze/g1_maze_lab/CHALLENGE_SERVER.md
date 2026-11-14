@@ -41,7 +41,7 @@ If Isaac Lab is not at `../../../../IsaacLab` (next to the course repo's folder)
 on.
 
 **The final level.** `--level final` is task `G1-Maze-Final` in `src/g1_maze_lab/tasks/challenge_final/` (10 x 10,
-600 s, start / goal random from the seed). It is not in the students' repo: put your own there and keep it out of
+600 s, start bottom-left, goal top-right like 7 and 9, the seed picks the maze). It is not in the students' repo: put your own there and keep it out of
 git (`echo Week07_Curriculum_Maze/g1_maze_lab/src/g1_maze_lab/tasks/challenge_final/ >> .git/info/exclude`).
 Without it, rounds can use level `7` or `9`.
 
